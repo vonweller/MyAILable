@@ -1,0 +1,269 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Tool Button Style -->
+  <Style Selector="Button.tool-button">
+    <Setter Property="Background" Value="{DynamicResource PrimaryButtonBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="16,12" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.tool-button:pointerover">
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+
+  <Style Selector="Button.tool-button:pressed">
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+
+  <!-- Accent Button Style -->
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{DynamicResource PrimaryButtonBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+
+  </Style>
+
+  <!-- Success Button Style -->
+  <Style Selector="Button.success">
+    <Setter Property="Background" Value="{DynamicResource SuccessButtonBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!-- Danger Button Style -->
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{DynamicResource DangerButtonBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!-- Secondary Button Style -->
+  <Style Selector="Button.secondary">
+    <Setter Property="Background" Value="{DynamicResource SecondaryButtonBrush}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!-- Collapsible Header Style -->
+  <Style Selector="Button.collapsible-header">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.collapsible-header:pointerover">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+  </Style>
+
+  <!-- Info Panel Style -->
+  <Style Selector="Border.info-panel">
+    <Setter Property="Background" Value="{DynamicResource InfoBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource InfoBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <!-- Warning Panel Style -->
+  <Style Selector="Border.warning-panel">
+    <Setter Property="Background" Value="{DynamicResource WarningBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <!-- Success Panel Style -->
+  <Style Selector="Border.success-panel">
+    <Setter Property="Background" Value="{DynamicResource SuccessBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+  <!-- Expander Arrow Animation -->
+  <Style Selector="TextBlock.expander-arrow">
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.expander-arrow.expanded">
+    <Setter Property="RenderTransform" Value="rotate(90deg)" />
+  </Style>
+
+  <!-- Simple Header Button Style -->
+  <Style Selector="Button.simple-header">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.simple-header:pointerover">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+  </Style>
+
+  <!-- Text Menu Item Style -->
+  <Style Selector="Button.text-menu-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="0,12" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.2" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.text-menu-item:pointerover">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.text-menu-item:pressed">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <!-- Panel Animation Style -->
+  <Style Selector="Border.animated-panel">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.3" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- Menu Item Container Style -->
+  <Style Selector="Border.menu-item-container">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,0" />
+  </Style>
+
+  <!-- Sidebar Menu Item Style -->
+  <Style Selector="Button.sidebar-menu-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="16,16" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.2" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.sidebar-menu-item:pointerover">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.sidebar-menu-item:pressed">
+    <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <!-- Dialog Styles -->
+  <Style Selector="Window.modern-dialog">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+
+  <Style Selector="Border.dialog-container">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="Border.header-section">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="0,0,0,16" />
+  </Style>
+
+  <Style Selector="Border.footer-section">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="0,16,0,0" />
+  </Style>
+
+  <Style Selector="Border.icon-container">
+    <Setter Property="Width" Value="48" />
+    <Setter Property="Height" Value="48" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="Border.status-icon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.value">
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+
+</Styles>

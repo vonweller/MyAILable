@@ -1,0 +1,73 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  
+  <!-- Light Theme Colors -->
+  <Style>
+    <Style.Resources>
+      <!-- Background Colors -->
+      <SolidColorBrush x:Key="AppBackgroundBrush">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="PanelBackgroundBrush">#F8F9FA</SolidColorBrush>
+      <SolidColorBrush x:Key="CardBackgroundBrush">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="HoverBackgroundBrush">#F0F0F0</SolidColorBrush>
+      
+      <!-- Border Colors -->
+      <SolidColorBrush x:Key="BorderBrush">#E1E8ED</SolidColorBrush>
+      <SolidColorBrush x:Key="AccentBorderBrush">#007ACC</SolidColorBrush>
+      
+      <!-- Text Colors -->
+      <SolidColorBrush x:Key="PrimaryTextBrush">#2C3E50</SolidColorBrush>
+      <SolidColorBrush x:Key="SecondaryTextBrush">#6C757D</SolidColorBrush>
+      <SolidColorBrush x:Key="AccentTextBrush">#007ACC</SolidColorBrush>
+      
+      <!-- Button Colors -->
+      <SolidColorBrush x:Key="PrimaryButtonBrush">#007ACC</SolidColorBrush>
+      <SolidColorBrush x:Key="SecondaryButtonBrush">#6C757D</SolidColorBrush>
+      <SolidColorBrush x:Key="SuccessButtonBrush">#28A745</SolidColorBrush>
+      <SolidColorBrush x:Key="WarningButtonBrush">#FFC107</SolidColorBrush>
+      <SolidColorBrush x:Key="DangerButtonBrush">#DC3545</SolidColorBrush>
+      
+      <!-- Status Colors -->
+      <SolidColorBrush x:Key="InfoBackgroundBrush">#E7F3FF</SolidColorBrush>
+      <SolidColorBrush x:Key="InfoBorderBrush">#B3D9FF</SolidColorBrush>
+      <SolidColorBrush x:Key="WarningBackgroundBrush">#FFF3CD</SolidColorBrush>
+      <SolidColorBrush x:Key="WarningBorderBrush">#FFEAA7</SolidColorBrush>
+      <SolidColorBrush x:Key="SuccessBackgroundBrush">#D4EDDA</SolidColorBrush>
+      <SolidColorBrush x:Key="SuccessBorderBrush">#C3E6CB</SolidColorBrush>
+      
+
+    </Style.Resources>
+  </Style>
+
+  <!-- Window Background -->
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+  </Style>
+
+  <!-- Panel Backgrounds -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <!-- Card Style -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <!-- Text Styles -->
+  <Style Selector="TextBlock.primary">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.secondary">
+    <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.accent">
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+</Styles>

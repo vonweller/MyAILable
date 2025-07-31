@@ -1,0 +1,697 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:AIlable.ViewModels"
+             xmlns:controls="clr-namespace:AIlable.Controls"
+             xmlns:models="clr-namespace:AIlable.Models"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+             x:Class="AIlable.Views.MainView"
+             x:DataType="vm:MainViewModel"
+             Focusable="True"
+             Background="Transparent">
+
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+F" Command="{Binding FitToWindowCommand}" />
+    <KeyBinding Gesture="Ctrl+R" Command="{Binding ResetViewCommand}" />
+    <KeyBinding Gesture="Ctrl+T" Command="{Binding ToggleThemeCommand}" />
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveProjectAsCommand}" />
+  </UserControl.KeyBindings>
+
+  <Design.DataContext>
+    <vm:MainViewModel />
+  </Design.DataContext>
+
+  <UserControl.Styles>
+    <!-- 工具按钮样式 -->
+    <Style Selector="Button.tool-button">
+      <Setter Property="Background" Value="#3498DB" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="16,10" />
+      <Setter Property="Margin" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="Button.tool-button:pointerover">
+      <Setter Property="Background" Value="#2980B9" />
+    </Style>
+
+    <Style Selector="Button.tool-button:pressed">
+      <Setter Property="Background" Value="#1F618D" />
+    </Style>
+
+    <!-- 选中的工具按钮样式 -->
+    <Style Selector="Button.tool-button.selected">
+      <Setter Property="Background" Value="#27AE60" />
+    </Style>
+
+    <Style Selector="Button.tool-button.selected:pointerover">
+      <Setter Property="Background" Value="#229954" />
+    </Style>
+
+    <!-- 标签按钮样式 -->
+    <Style Selector="Button.label-button">
+      <Setter Property="Background" Value="#E74C3C" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Margin" Value="4" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+
+    <Style Selector="Button.label-button:pointerover">
+      <Setter Property="Background" Value="#C0392B" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- Menu Bar -->
+    <Menu DockPanel.Dock="Top" Background="White" Foreground="#2C3E50" Padding="8,6"
+          BorderBrush="#E1E8ED" BorderThickness="0,0,0,1">
+      <MenuItem Header="文件">
+        <MenuItem Header="新建项目" Command="{Binding CreateNewProjectCommand}" />
+        <MenuItem Header="打开项目..." Command="{Binding OpenProjectCommand}" />
+        <Separator />
+        <MenuItem Header="保存项目" Command="{Binding SaveProjectCommand}" InputGesture="Ctrl+S" />
+        <MenuItem Header="另存为..." Command="{Binding SaveProjectAsCommand}" InputGesture="Ctrl+Shift+S" />
+        <Separator />
+        <MenuItem Header="添加图像..." Command="{Binding AddImagesCommand}" />
+        <MenuItem Header="打开图像..." Command="{Binding LoadImageCommand}" />
+        <Separator />
+        <MenuItem Header="退出" />
+      </MenuItem>
+      <MenuItem Header="视图">
+        <MenuItem Header="适应窗口" Command="{Binding FitToWindowCommand}" InputGesture="Ctrl+F" />
+        <MenuItem Header="重置视图" Command="{Binding ResetViewCommand}" InputGesture="Ctrl+R" />
+        <Separator />
+        <MenuItem Header="切换主题" Command="{Binding ToggleThemeCommand}" InputGesture="Ctrl+T" />
+      </MenuItem>
+      <MenuItem Header="导出">
+        <MenuItem Header="导出数据集..." Command="{Binding ExportProjectCommand}" />
+      </MenuItem>
+      <MenuItem Header="帮助">
+        <MenuItem Header="关于" />
+      </MenuItem>
+    </Menu>
+
+    <!-- Status Bar -->
+    <Border DockPanel.Dock="Bottom"
+            Background="#F8F9FA"
+            BorderBrush="#E1E8ED"
+            BorderThickness="0,1,0,0"
+            Padding="12,8">
+      <Grid>
+        <TextBlock Text="{Binding StatusText}"
+                   VerticalAlignment="Center"
+                   Foreground="#2C3E50"
+                   FontWeight="Medium"
+                   FontSize="13" />
+        <StackPanel Orientation="Horizontal"
+                   Spacing="20"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Center">
+          <Border Background="#E8F5E8"
+                  CornerRadius="12"
+                  Padding="8,4"
+                  IsVisible="{Binding HasImage}">
+            <TextBlock Text="{Binding CurrentImage.Width, StringFormat='宽度: {0}'}"
+                       Foreground="#27AE60"
+                       FontSize="11"
+                       FontWeight="Medium" />
+          </Border>
+          <Border Background="#E8F5E8"
+                  CornerRadius="12"
+                  Padding="8,4"
+                  IsVisible="{Binding HasImage}">
+            <TextBlock Text="{Binding CurrentImage.Height, StringFormat='高度: {0}'}"
+                       Foreground="#27AE60"
+                       FontSize="11"
+                       FontWeight="Medium" />
+          </Border>
+          <Border Background="#E3F2FD"
+                  CornerRadius="12"
+                  Padding="8,4"
+                  IsVisible="{Binding HasImage}">
+            <TextBlock Text="{Binding Annotations.Count, StringFormat='标注: {0}'}"
+                       Foreground="#2196F3"
+                       FontSize="11"
+                       FontWeight="Medium" />
+          </Border>
+          <TextBlock Text="快捷键: W/S-切换图像 A/D-切换标签 Ctrl+S-保存"
+                     FontSize="10"
+                     Foreground="#7F8C8D"
+                     IsVisible="{Binding HasProject}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Main Content Area -->
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="200" MinWidth="150" />
+        <ColumnDefinition Width="5" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="5" />
+        <ColumnDefinition Width="280" MinWidth="250" MaxWidth="350" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Left Panel - Project Explorer -->
+      <Border Grid.Column="0" Background="White"
+              BorderBrush="#E1E8ED"
+              BorderThickness="0,0,1,0"
+              IsVisible="{Binding HasProject}">
+        <DockPanel Margin="16">
+          <TextBlock DockPanel.Dock="Top" Text="项目浏览器"
+                     FontWeight="SemiBold"
+                     FontSize="16"
+                     Foreground="#2C3E50"
+                     Margin="0,0,0,16" />
+          
+          <ScrollViewer>
+            <StackPanel>
+              <Border Background="#F8F9FA"
+                      BorderBrush="#E1E8ED"
+                      BorderThickness="1"
+                      CornerRadius="8"
+                      Padding="16"
+                      Margin="0,0,0,16">
+                <StackPanel>
+                  <TextBlock Text="当前项目"
+                             FontWeight="SemiBold"
+                             FontSize="13"
+                             Foreground="#2C3E50"
+                             Margin="0,0,0,8" />
+                  <TextBlock Text="{Binding CurrentProject.Name}"
+                             IsVisible="{Binding HasProject}"
+                             FontSize="12"
+                             Foreground="#34495E" />
+                  <TextBlock Text="无项目"
+                             IsVisible="{Binding !HasProject}"
+                             FontSize="12"
+                             Foreground="#95A5A6" />
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="图像列表"
+                         FontWeight="SemiBold"
+                         FontSize="13"
+                         Foreground="#2C3E50"
+                         Margin="0,0,0,8" />
+              <ListBox ItemsSource="{Binding CurrentProject.Images}"
+                       SelectedIndex="{Binding CurrentImageIndex}"
+                       SelectedItem="{Binding CurrentImage}"
+                       IsVisible="{Binding HasProject}"
+                       MinHeight="200"
+                       Name="ImageListBox"
+                       Background="White"
+                       BorderBrush="#D0D7DE"
+                       BorderThickness="1"
+                       CornerRadius="6"
+                       Padding="8">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="Transparent"
+                            Padding="10,8"
+                            Margin="0,2"
+                            CornerRadius="4">
+                      <StackPanel Orientation="Vertical">
+                        <TextBlock Text="{Binding FileName}"
+                                   FontWeight="Medium"
+                                   FontSize="12"
+                                   Foreground="#24292F" />
+                        <TextBlock Text="{Binding Annotations.Count, StringFormat='标注: {0}'}"
+                                   FontSize="10"
+                                   Foreground="#656D76"
+                                   Margin="0,2,0,0" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.Styles>
+                  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                    <Setter Property="Background" Value="#E7F3FF" />
+                  </Style>
+                  <Style Selector="ListBoxItem:selected Border">
+                    <Setter Property="Background" Value="#E7F3FF" />
+                  </Style>
+                  <Style Selector="ListBoxItem:pointerover Border">
+                    <Setter Property="Background" Value="#F6F8FA" />
+                  </Style>
+                </ListBox.Styles>
+              </ListBox>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Width="5" IsVisible="{Binding HasProject}" />
+
+      <!-- Center Panel - Image Canvas -->
+      <Border Grid.Column="2" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+        <Grid>
+          <!-- Image Canvas -->
+          <controls:ImageCanvas Name="ImageCanvas"
+                               Image="{Binding CurrentImageBitmap}"
+                               Annotations="{Binding Annotations}"
+                               SelectedAnnotation="{Binding SelectedAnnotation}"
+                               IsVisible="{Binding HasImage}" />
+
+          <!-- Placeholder when no project -->
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                     IsVisible="{Binding !HasProject}">
+            <Border Background="White"
+                    BorderBrush="#E1E8ED"
+                    BorderThickness="2"
+                    CornerRadius="16"
+                    Padding="60,40">
+              <StackPanel HorizontalAlignment="Center">
+                <Ellipse Width="80" Height="80"
+                         Fill="#F8F9FA"
+                         Stroke="#E1E8ED"
+                         StrokeThickness="2"
+                         Margin="0,0,0,20">
+                </Ellipse>
+                <TextBlock Text="📁"
+                           FontSize="32"
+                           HorizontalAlignment="Center"
+                           Margin="0,-56,0,36" />
+                <TextBlock Text="开始您的AI标注项目"
+                          HorizontalAlignment="Center"
+                          FontSize="20"
+                          FontWeight="Medium"
+                          Foreground="#2C3E50"
+                          Margin="0,0,0,24" />
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Button Content="新建项目"
+                         Command="{Binding CreateNewProjectCommand}"
+                         HorizontalAlignment="Center"
+                         Background="#3498DB"
+                         Foreground="White"
+                         BorderBrush="Transparent"
+                         Padding="20,10"
+                         FontSize="14"
+                         FontWeight="Medium"
+                         CornerRadius="10" />
+                  <Button Content="打开项目"
+                         Command="{Binding OpenProjectCommand}"
+                         HorizontalAlignment="Center"
+                         Background="#95A5A6"
+                         Foreground="White"
+                         BorderBrush="Transparent"
+                         Padding="20,10"
+                         FontSize="14"
+                         FontWeight="Medium"
+                         CornerRadius="10" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- Placeholder when project exists but no image -->
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                     IsVisible="{Binding HasProject}">
+            <StackPanel IsVisible="{Binding !HasImage}">
+              <Border Background="White"
+                      BorderBrush="#E1E8ED"
+                      BorderThickness="2"
+                      CornerRadius="16"
+                      Padding="60,40">
+                <StackPanel HorizontalAlignment="Center">
+                  <Ellipse Width="80" Height="80"
+                           Fill="#F8F9FA"
+                           Stroke="#E1E8ED"
+                           StrokeThickness="2"
+                           Margin="0,0,0,20">
+                  </Ellipse>
+                  <TextBlock Text="📷"
+                             FontSize="32"
+                             HorizontalAlignment="Center"
+                             Margin="0,-56,0,36" />
+                  <TextBlock Text="添加图像开始标注"
+                            HorizontalAlignment="Center"
+                            FontSize="20"
+                            FontWeight="Medium"
+                            Foreground="#2C3E50"
+                            Margin="0,0,0,24" />
+                  <Button Content="添加图像"
+                         Command="{Binding AddImagesCommand}"
+                         HorizontalAlignment="Center"
+                         Background="#27AE60"
+                         Foreground="White"
+                         BorderBrush="Transparent"
+                         Padding="24,12"
+                         FontSize="14"
+                         FontWeight="Medium"
+                         CornerRadius="10" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="3" Width="5" IsVisible="{Binding HasProject}" />
+
+      <!-- Right Panel - Tools and Properties -->
+      <Border Grid.Column="4" Background="White"
+              BorderBrush="#E1E8ED"
+              BorderThickness="1,0,0,0"
+              IsVisible="{Binding HasProject}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="16" Spacing="0">
+
+            <!-- 工具选择 -->
+            <Border Classes="menu-item-container">
+              <Button Content="🛠️ 工具选择"
+                      x:Name="ToolsButton"
+                      Classes="sidebar-menu-item"
+                      Click="OnToolsClick" />
+            </Border>
+            <Border x:Name="ToolsPanel"
+                    IsVisible="False"
+                    Classes="card animated-panel"
+                    Margin="0,8,0,16"
+                    Padding="16">
+              <UniformGrid Columns="2">
+                <Button Content="选择" Command="{Binding SelectToolCommand}" Classes="tool-button" Margin="2" />
+                <Button Content="矩形" Command="{Binding RectangleToolCommand}" Classes="tool-button" Margin="2" />
+                <Button Content="圆形" Command="{Binding CircleToolCommand}" Classes="tool-button" Margin="2" />
+                <Button Content="多边形" Command="{Binding PolygonToolCommand}" Classes="tool-button" Margin="2" />
+                <Button Content="线条" Command="{Binding LineToolCommand}" Classes="tool-button" Margin="2" />
+                <Button Content="点" Command="{Binding PointToolCommand}" Classes="tool-button" Margin="2" />
+                <Button Content="📦 OBB" Command="{Binding OrientedBoundingBoxToolCommand}" Classes="tool-button" Margin="2" ToolTip.Tip="有向边界框" />
+              </UniformGrid>
+            </Border>
+
+
+
+            <!-- 标签选择 -->
+            <Border Classes="menu-item-container">
+              <Button Content="🏷️ 标签选择"
+                      x:Name="LabelsButton"
+                      Classes="sidebar-menu-item"
+                      Click="OnLabelsClick" />
+            </Border>
+            <Border x:Name="LabelsPanel"
+                    IsVisible="True"
+                    Classes="card animated-panel"
+                    Margin="0,8,0,16"
+                    Padding="16">
+              <StackPanel Spacing="12">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ComboBox Grid.Column="0"
+                            ItemsSource="{Binding AvailableLabels}"
+                            SelectedItem="{Binding CurrentLabel}"
+                            FontSize="13"
+                            Padding="12,8"
+                            CornerRadius="8" />
+                  <Button Grid.Column="1"
+                          Content="+"
+                          Command="{Binding AddNewLabelCommand}"
+                          Width="28"
+                          Height="28"
+                          Classes="success"
+                          CornerRadius="14"
+                          FontSize="16"
+                          FontWeight="Bold"
+                          Margin="8,0,4,0"
+                          ToolTip.Tip="添加新标签" />
+                  <Button Grid.Column="2"
+                          Content="×"
+                          Command="{Binding DeleteCurrentLabelCommand}"
+                          Width="28"
+                          Height="28"
+                          Classes="danger"
+                          CornerRadius="14"
+                          FontSize="16"
+                          FontWeight="Bold"
+                          Margin="0,0,0,0"
+                          ToolTip.Tip="删除当前标签" />
+                </Grid>
+                <Grid ColumnDefinitions="*,*">
+                  <Button Grid.Column="0"
+                          Content="◀ 上一个"
+                          Command="{Binding PreviousLabelCommand}"
+                          Classes="accent"
+                          Padding="8,10"
+                          CornerRadius="8"
+                          FontSize="11"
+                          Margin="0,0,4,0" />
+                  <Button Grid.Column="1"
+                          Content="下一个 ▶"
+                          Command="{Binding NextLabelCommand}"
+                          Classes="accent"
+                          Padding="8,10"
+                          CornerRadius="8"
+                          FontSize="11"
+                          Margin="4,0,0,0" />
+                </Grid>
+                <Border Classes="success-panel">
+                  <TextBlock Text="{Binding CurrentLabel, StringFormat='✓ 当前: {0}'}"
+                             Classes="primary"
+                             FontSize="12"
+                             HorizontalAlignment="Center"
+                             FontWeight="Medium" />
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <!-- AI自动化 -->
+            <Border Classes="menu-item-container">
+              <Button Content="🤖 AI自动化"
+                      x:Name="AIButton"
+                      Classes="sidebar-menu-item"
+                      Click="OnAIClick" />
+            </Border>
+            <Border x:Name="AIPanel"
+                    IsVisible="False"
+                    Classes="card animated-panel"
+                    Margin="0,8,0,16"
+                    Padding="16">
+              <StackPanel Spacing="12">
+                <!-- AI状态显示 -->
+                <Border Background="{DynamicResource HoverBackgroundBrush}"
+                        CornerRadius="8"
+                        Padding="12">
+                  <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="🤖 AI模型状态"
+                                 FontWeight="Medium"
+                                 FontSize="12" />
+                      <Border Background="#FFF3E0"
+                              CornerRadius="12"
+                              Padding="6,3">
+                        <TextBlock Text="Beta"
+                                   FontSize="10"
+                                   Foreground="#FF9800"
+                                   FontWeight="Bold" />
+                      </Border>
+                    </StackPanel>
+
+                    <TextBlock Text="使用AI模型自动生成标注"
+                               FontSize="11"
+                               Classes="secondary"
+                               TextWrapping="Wrap" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="模型状态:" FontSize="11" Classes="secondary" />
+                      <TextBlock Text="{Binding AIModelStatus}"
+                                 FontSize="11"
+                                 FontWeight="Medium"
+                                 Classes="accent" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasAIModel}">
+                      <TextBlock Text="当前模型:" FontSize="11" Classes="secondary" />
+                      <TextBlock Text="{Binding CurrentAIModelName}"
+                                 FontSize="11"
+                                 FontWeight="Medium"
+                                 Classes="primary" />
+                    </StackPanel>
+
+                    <!-- 模型配置按钮 -->
+                    <Button Content="🔧 模型配置"
+                            Command="{Binding ConfigureAIModelCommand}"
+                            Classes="secondary"
+                            Padding="12,8"
+                            CornerRadius="6"
+                            FontSize="11"
+                            FontWeight="Medium"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,4,0,0" />
+                  </StackPanel>
+                </Border>
+
+                <!-- 标注控制区域 -->
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        CornerRadius="8"
+                        Padding="12"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="🤖 AI标注控制"
+                               FontWeight="Medium"
+                               FontSize="12"
+                               HorizontalAlignment="Center" />
+
+                    <!-- 标注模式选择 -->
+                    <StackPanel Spacing="6">
+                      <TextBlock Text="标注模式:"
+                                 FontSize="11"
+                                 Classes="secondary" />
+                      <StackPanel Orientation="Horizontal" Spacing="12">
+                        <RadioButton x:Name="FastModeRadio"
+                                     Content="⚡ 极速"
+                                     IsChecked="True"
+                                     FontSize="11"
+                                     ToolTip.Tip="快速批量标注，直接应用结果" />
+                        <RadioButton x:Name="PreviewModeRadio"
+                                     Content="👁️ 预览"
+                                     FontSize="11"
+                                     ToolTip.Tip="显示标注预览，确认后应用" />
+                      </StackPanel>
+                    </StackPanel>
+
+                    <!-- 主要标注按钮 -->
+                    <Button x:Name="StartAnnotationButton"
+                            Content="▶️ 开始标注"
+                            Command="{Binding StartAIAnnotationCommand}"
+                            Classes="success"
+                            Padding="16,12"
+                            CornerRadius="8"
+                            FontSize="12"
+                            FontWeight="Medium"
+                            HorizontalAlignment="Stretch" />
+
+                    <!-- 控制按钮组 -->
+                    <Grid ColumnDefinitions="*,*" Margin="0,4">
+                      <Button x:Name="PauseResumeButton"
+                              Grid.Column="0"
+                              Content="⏸️ 暂停"
+                              Command="{Binding PauseResumeAnnotationCommand}"
+                              Classes="warning"
+                              Padding="10,8"
+                              CornerRadius="6"
+                              FontSize="10"
+                              FontWeight="Medium"
+                              IsEnabled="False"
+                              Margin="0,0,2,0" />
+
+                      <Button x:Name="StopAnnotationButton"
+                              Grid.Column="1"
+                              Content="⏹️ 停止"
+                              Command="{Binding StopAnnotationCommand}"
+                              Classes="danger"
+                              Padding="10,8"
+                              CornerRadius="6"
+                              FontSize="10"
+                              FontWeight="Medium"
+                              IsEnabled="False"
+                              Margin="2,0,0,0" />
+                    </Grid>
+
+                    <!-- 进度显示 -->
+                    <StackPanel x:Name="ProgressPanel"
+                                Spacing="6"
+                                IsVisible="{Binding IsAnnotationInProgress}"
+                                Margin="0,4">
+                      <!-- 主进度条 -->
+                      <ProgressBar x:Name="AnnotationProgress"
+                                   Height="8"
+                                   CornerRadius="4"
+                                   Value="{Binding AnnotationProgress}"
+                                   Maximum="100"
+                                   Background="{DynamicResource HoverBackgroundBrush}"
+                                   Foreground="#4CAF50" />
+
+                      <!-- 进度文本 -->
+                      <TextBlock x:Name="ProgressText"
+                                 Text="{Binding AnnotationProgressText}"
+                                 FontSize="10"
+                                 Classes="secondary"
+                                 HorizontalAlignment="Center"
+                                 TextWrapping="Wrap" />
+
+                      <!-- 详细状态信息 -->
+                      <Border Background="{DynamicResource HoverBackgroundBrush}"
+                              CornerRadius="4"
+                              Padding="8,4"
+                              IsVisible="{Binding HasDetailedProgress}">
+                        <StackPanel Spacing="2">
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="已完成:"
+                                       FontSize="9"
+                                       Classes="secondary" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding ProcessedCount}"
+                                       FontSize="9"
+                                       FontWeight="Medium" />
+                          </Grid>
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="总数:"
+                                       FontSize="9"
+                                       Classes="secondary" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding TotalCount}"
+                                       FontSize="9"
+                                       FontWeight="Medium" />
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+
+                <!-- 传统按钮（保持兼容性） -->
+                <StackPanel Spacing="8">
+                  <Separator Margin="0,8" />
+                  <TextBlock Text="传统模式"
+                             FontSize="11"
+                             Classes="secondary"
+                             HorizontalAlignment="Center" />
+
+                  <Button Content="🤖 自动推理未标注图片"
+                          Command="{Binding RunAutoInferenceCommand}"
+                          Classes="secondary"
+                          Padding="16,10"
+                          CornerRadius="8"
+                          FontSize="12"
+                          FontWeight="Medium" />
+                  <Button Content="⚡ 手动推理当前图片"
+                          Command="{Binding RunAIInferenceCommand}"
+                          Classes="accent"
+                          Padding="16,10"
+                          CornerRadius="8"
+                          FontSize="12"
+                          FontWeight="Medium" />
+                  <Button Content="📦 批量推理所有图片"
+                          Command="{Binding RunBatchAIInferenceCommand}"
+                          Classes="danger"
+                          Padding="16,10"
+                          CornerRadius="8"
+                          FontSize="12"
+                          FontWeight="Medium" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

@@ -1,0 +1,167 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AIlable.ViewModels"
+        x:Class="AIlable.Views.YoloExportDialog"
+        x:DataType="vm:YoloExportDialogViewModel"
+        Title="YOLO 导出设置"
+        Width="600"
+        Height="700"
+        MinWidth="550"
+        MinHeight="650"
+        WindowStartupLocation="CenterOwner"
+        CanResize="true">
+
+  <Design.DataContext>
+    <vm:YoloExportDialogViewModel />
+  </Design.DataContext>
+
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- 标题 -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,24">
+      <TextBlock Text="🎯" FontSize="28" Margin="0,0,12,0" VerticalAlignment="Center" />
+      <TextBlock Text="YOLO 导出配置" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <!-- 主要内容 -->
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="20">
+        
+        <!-- 格式选择 -->
+        <Border Background="White" BorderBrush="#E1E8ED" BorderThickness="1" CornerRadius="12" Padding="20">
+          <StackPanel Spacing="16">
+            <TextBlock Text="📋 导出格式选择" FontSize="16" FontWeight="SemiBold" />
+            
+            <StackPanel Spacing="12">
+              <RadioButton Content="分割格式 (Segmentation)" 
+                           IsChecked="{Binding UseSegmentationFormat}" 
+                           FontWeight="SemiBold" />
+              <RadioButton Content="检测格式 (Detection)" 
+                           IsChecked="{Binding !UseSegmentationFormat}" 
+                           FontWeight="SemiBold" />
+            </StackPanel>
+            
+            <!-- 格式说明 -->
+            <Border Background="#F8F9FA" BorderBrush="#DEE2E6" BorderThickness="1" CornerRadius="8" Padding="16">
+              <TextBlock Text="{Binding FormatDescription}" 
+                         TextWrapping="Wrap" 
+                         LineHeight="20"
+                         FontSize="13" />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- 标注统计 -->
+        <Border Background="White" BorderBrush="#E1E8ED" BorderThickness="1" CornerRadius="12" Padding="20"
+                IsVisible="{Binding AnnotationTypes.Count}">
+          <StackPanel Spacing="16">
+            <TextBlock Text="📊 项目标注统计" FontSize="16" FontWeight="SemiBold" />
+            
+            <ItemsControl ItemsSource="{Binding TypeStatistics}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Background="#F8F9FA" CornerRadius="6" Padding="12,8" Margin="0,4">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Text="{Binding Key}" FontWeight="SemiBold" />
+                      <Border Grid.Column="1" Background="#007ACC" CornerRadius="12" Padding="8,4">
+                        <TextBlock Text="{Binding Value}" Foreground="White" FontSize="12" />
+                      </Border>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- 智能建议 -->
+        <Border Background="#E7F3FF" BorderBrush="#B3D9FF" BorderThickness="1" CornerRadius="12" Padding="20">
+          <StackPanel Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="💡" FontSize="16" />
+              <TextBlock Text="智能建议" FontSize="16" FontWeight="SemiBold" />
+            </StackPanel>
+            <TextBlock Text="{Binding Recommendation}"
+                       TextWrapping="Wrap"
+                       LineHeight="20"
+                       FontSize="13" />
+          </StackPanel>
+        </Border>
+
+        <!-- 导出选项 -->
+        <Border Background="White" BorderBrush="#E1E8ED" BorderThickness="1" CornerRadius="12" Padding="20">
+          <StackPanel Spacing="16">
+            <TextBlock Text="⚙️ 导出选项" FontSize="16" FontWeight="SemiBold" />
+            
+            <StackPanel Spacing="12">
+              <CheckBox Content="包含图像文件" IsChecked="{Binding IncludeImages}" />
+              <CheckBox Content="分割训练/验证集" IsChecked="{Binding SplitTrainVal}" />
+              
+              <StackPanel IsVisible="{Binding SplitTrainVal}" Spacing="8">
+                <TextBlock Text="训练集比例:" FontSize="13" />
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Slider Value="{Binding TrainRatio}" 
+                          Minimum="0.1" Maximum="0.9" 
+                          Width="200" />
+                  <TextBlock Text="{Binding TrainRatio, StringFormat='{}{0:P0}'}" 
+                             FontWeight="SemiBold" 
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 输出路径 -->
+        <Border Background="White" BorderBrush="#E1E8ED" BorderThickness="1" CornerRadius="12" Padding="20">
+          <StackPanel Spacing="16">
+            <TextBlock Text="📁 输出路径" FontSize="16" FontWeight="SemiBold" />
+            
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              
+              <TextBox Grid.Column="0" 
+                       Text="{Binding OutputPath}" 
+                       Watermark="选择导出目录..." 
+                       IsReadOnly="True" 
+                       Margin="0,0,12,0" />
+              
+              <Button Grid.Column="1" 
+                      Content="浏览..." 
+                      Click="OnBrowseClick" 
+                      Padding="16,8" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- 按钮 -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="0,24,0,0">
+      <Button Content="取消" 
+              Click="OnCancelClick" 
+              Padding="20,10" 
+              MinWidth="100" />
+      <Button Content="导出" 
+              Click="OnExportClick" 
+              Classes="accent" 
+              Padding="20,10" 
+              MinWidth="100"
+              IsEnabled="{Binding OutputPath}" />
+    </StackPanel>
+
+  </Grid>
+</Window>

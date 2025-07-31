@@ -1,0 +1,184 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:AIlable.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="500"
+        x:Class="AIlable.Views.AIModelConfigDialog"
+        x:DataType="vm:AIModelConfigDialogViewModel"
+        Title="🤖 AI模型配置"
+        Width="600" Height="500"
+        WindowStartupLocation="CenterOwner"
+        CanResize="false"
+        Background="{DynamicResource BackgroundBrush}"
+        Classes="modern-dialog">
+
+  <Design.DataContext>
+    <vm:AIModelConfigDialogViewModel />
+  </Design.DataContext>
+
+  <Border Classes="dialog-container" Margin="0">
+    <DockPanel Margin="24">
+      <!-- Header -->
+      <Border DockPanel.Dock="Top" Classes="header-section" Margin="0,0,0,24">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Border Classes="icon-container">
+              <TextBlock Text="🤖" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="AI模型管理" FontSize="20" FontWeight="Bold" Classes="primary" />
+              <TextBlock Text="配置和管理您的AI推理模型" FontSize="12" Classes="secondary" Margin="0,2,0,0" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Footer Buttons -->
+      <Border DockPanel.Dock="Bottom" Classes="footer-section" Margin="0,24,0,0">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+          <Button Content="取消"
+                  Command="{Binding CancelCommand}"
+                  Classes="secondary"
+                  IsCancel="True"
+                  MinWidth="100"
+                  Padding="16,10" />
+          <Button Content="确定"
+                  Command="{Binding ConfirmCommand}"
+                  Classes="primary"
+                  IsDefault="True"
+                  MinWidth="100"
+                  Padding="16,10" />
+        </StackPanel>
+      </Border>
+
+      <!-- Main Content -->
+      <ScrollViewer>
+        <StackPanel Spacing="20">
+
+
+
+          <!-- Model Loading Card -->
+          <Border Classes="card">
+            <StackPanel Spacing="20">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border Width="32" Height="32" CornerRadius="16" Background="#4CAF50">
+                  <TextBlock Text="+" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="加载新模型" FontWeight="SemiBold" FontSize="16" />
+                  <TextBlock Text="支持YOLO、ONNX等多种格式，自动转换" FontSize="12" Opacity="0.7" />
+                </StackPanel>
+              </StackPanel>
+
+              <StackPanel Spacing="16">
+                <!-- Model Type Selection -->
+                <StackPanel Spacing="8">
+                  <TextBlock Text="模型类型" FontWeight="Medium" />
+                  <ComboBox ItemsSource="{Binding AvailableModelTypes}"
+                            SelectedItem="{Binding SelectedModelType}"
+                            HorizontalAlignment="Stretch"
+                            Padding="12,8"
+                            FontSize="14" />
+                </StackPanel>
+
+                <!-- Model File Selection -->
+                <StackPanel Spacing="8">
+                  <TextBlock Text="模型文件" FontWeight="Medium" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding ModelFilePath}"
+                             IsReadOnly="True"
+                             Padding="12,8"
+                             FontSize="14"
+                             Watermark="请选择模型文件..." />
+                    <Button Grid.Column="1"
+                            Content="📁 浏览"
+                            Command="{Binding BrowseModelCommand}"
+                            Classes="accent"
+                            Margin="8,0,0,0"
+                            Padding="16,8" />
+                  </Grid>
+                </StackPanel>
+
+                <!-- Action Buttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="0,8,0,0">
+                  <Button Content="🗑️ 卸载模型"
+                          Command="{Binding UnloadModelCommand}"
+                          IsEnabled="{Binding HasCurrentModel}"
+                          Classes="secondary"
+                          Padding="16,8" />
+                  <Button Content="⚡ 加载模型"
+                          Command="{Binding LoadModelCommand}"
+                          IsEnabled="{Binding CanLoadModel}"
+                          Classes="success"
+                          Padding="16,8" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Model Loading Debug Messages -->
+          <Border Classes="card" IsVisible="{Binding IsLoadingModel}">
+            <StackPanel Spacing="16">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border Width="32" Height="32" CornerRadius="16" Background="#FF9800">
+                  <TextBlock Text="🔄" FontSize="16" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="模型加载进度" FontWeight="SemiBold" FontSize="16" />
+                  <TextBlock Text="显示详细的加载调试信息" FontSize="12" Opacity="0.7" />
+                </StackPanel>
+              </StackPanel>
+
+              <!-- Progress Bar -->
+              <ProgressBar Value="{Binding LoadingProgress}"
+                           Maximum="100"
+                           Height="8"
+                           CornerRadius="4" />
+
+              <!-- Debug Messages -->
+              <Border Background="{DynamicResource HoverBackgroundBrush}"
+                      CornerRadius="8"
+                      Padding="12"
+                      MaxHeight="200">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                  <TextBlock Text="{Binding LoadingDebugMessages}"
+                             FontFamily="Consolas,Monaco,monospace"
+                             FontSize="11"
+                             TextWrapping="Wrap"
+                             Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </ScrollViewer>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <!-- Model Information Card -->
+          <Border Classes="card" IsVisible="{Binding !IsLoadingModel}">
+            <StackPanel Spacing="16">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border Width="32" Height="32" CornerRadius="16" Background="#2196F3">
+                  <TextBlock Text="ℹ" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="模型信息和使用说明" FontWeight="SemiBold" FontSize="16" />
+                  <TextBlock Text="了解模型的详细信息和使用方法" FontSize="12" Opacity="0.7" />
+                </StackPanel>
+              </StackPanel>
+
+              <Border Background="{DynamicResource HoverBackgroundBrush}" CornerRadius="8" Padding="16">
+                <ScrollViewer MaxHeight="120">
+                  <TextBlock Text="{Binding ModelDescription}"
+                             TextWrapping="Wrap"
+                             FontSize="13"
+                             LineHeight="20" />
+                </ScrollViewer>
+              </Border>
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</Window>

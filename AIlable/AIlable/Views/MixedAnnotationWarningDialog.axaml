@@ -1,0 +1,108 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AIlable.ViewModels"
+        x:Class="AIlable.Views.MixedAnnotationWarningDialog"
+        x:DataType="vm:MixedAnnotationWarningDialogViewModel"
+        Title="混合标注类型提醒"
+        Width="500"
+        Height="400"
+        MinWidth="450"
+        MinHeight="350"
+        WindowStartupLocation="CenterOwner"
+        CanResize="true">
+
+  <Design.DataContext>
+    <vm:MixedAnnotationWarningDialogViewModel />
+  </Design.DataContext>
+
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- 标题和警告图标 -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,20">
+      <TextBlock Text="⚠️" FontSize="24" Margin="0,0,10,0" VerticalAlignment="Center" />
+      <TextBlock Text="混合标注类型检测" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <!-- 主要内容 -->
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="15">
+        
+        <!-- 警告信息 -->
+        <Border Background="#FFF3CD" BorderBrush="#FFEAA7" BorderThickness="1" CornerRadius="5" Padding="15">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding WarningMessage}" 
+                       FontWeight="SemiBold" 
+                       TextWrapping="Wrap" />
+            
+            <TextBlock Text="不同的标注类型在导出时会有不同的处理方式，这可能会影响模型训练效果。" 
+                       TextWrapping="Wrap" 
+                       Foreground="#856404" />
+          </StackPanel>
+        </Border>
+
+        <!-- 导出格式信息 -->
+        <Border Background="#E7F3FF" BorderBrush="#B3D9FF" BorderThickness="1" CornerRadius="5" Padding="15">
+          <StackPanel Spacing="8">
+            <TextBlock Text="当前导出设置：" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="格式：" />
+              <TextBlock Text="{Binding ExportFormat}" FontWeight="SemiBold" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="模式：" />
+              <TextBlock Text="分割格式" FontWeight="SemiBold" IsVisible="{Binding UseSegmentationFormat}" />
+              <TextBlock Text="检测格式" FontWeight="SemiBold" IsVisible="{Binding !UseSegmentationFormat}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 建议信息 -->
+        <Border Background="#D4EDDA" BorderBrush="#C3E6CB" BorderThickness="1" CornerRadius="5" Padding="15">
+          <StackPanel Spacing="8">
+            <TextBlock Text="处理方式说明：" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding RecommendationMessage}" 
+                       TextWrapping="Wrap" 
+                       LineHeight="20" />
+          </StackPanel>
+        </Border>
+
+        <!-- 标注类型详情 -->
+        <Border Background="#F8F9FA" BorderBrush="#DEE2E6" BorderThickness="1" CornerRadius="5" Padding="15">
+          <StackPanel Spacing="8">
+            <TextBlock Text="项目中的标注类型：" FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{Binding AnnotationTypes}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <TextBlock Text="• " />
+                    <TextBlock Text="{Binding ., Converter={x:Static vm:MixedAnnotationWarningDialogViewModel.AnnotationTypeConverter}}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- 按钮 -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,20,0,0">
+      <Button Content="取消导出" 
+              Click="OnCancelClick" 
+              Padding="15,8" 
+              MinWidth="100" />
+      <Button Content="继续导出" 
+              Click="OnContinueClick" 
+              Classes="accent" 
+              Padding="15,8" 
+              MinWidth="100" />
+    </StackPanel>
+
+  </Grid>
+</Window>

@@ -1,0 +1,54 @@
+<ContentControl xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:controls="clr-namespace:AIlable.Controls"
+                x:Class="AIlable.Controls.CollapsiblePanel">
+
+  <Border Classes="card" Padding="0" Margin="0,12,0,0">
+    <StackPanel>
+      <!-- Header -->
+      <Button Classes="collapsible-header" 
+              Click="OnHeaderClick"
+              Padding="20,16">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <!-- Icon -->
+          <TextBlock Grid.Column="0"
+                     Text="{Binding Icon, RelativeSource={RelativeSource AncestorType=controls:CollapsiblePanel}}"
+                     FontSize="18"
+                     VerticalAlignment="Center"
+                     Margin="0,0,12,0"
+                     IsVisible="{Binding Icon, RelativeSource={RelativeSource AncestorType=controls:CollapsiblePanel}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          <!-- Title -->
+          <TextBlock Grid.Column="1"
+                     Text="{Binding Title, RelativeSource={RelativeSource AncestorType=controls:CollapsiblePanel}}"
+                     Classes="primary"
+                     FontWeight="SemiBold"
+                     FontSize="15"
+                     VerticalAlignment="Center" />
+
+          <!-- Expand/Collapse Arrow -->
+          <TextBlock Grid.Column="2" 
+                     x:Name="ExpanderArrow"
+                     Text="▶"
+                     Classes="expander-arrow secondary"
+                     FontSize="12"
+                     VerticalAlignment="Center" />
+        </Grid>
+      </Button>
+
+      <!-- Content -->
+      <Border x:Name="ContentContainer"
+              IsVisible="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=controls:CollapsiblePanel}}"
+              Padding="20,0,20,20">
+        <ContentPresenter />
+      </Border>
+    </StackPanel>
+  </Border>
+
+</ContentControl>

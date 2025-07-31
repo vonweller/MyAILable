@@ -1,0 +1,118 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:AIlable.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="400"
+        x:Class="AIlable.Views.ExportDialog"
+        x:DataType="vm:ExportDialogViewModel"
+        Title="导出数据集"
+        Width="500" Height="400"
+        WindowStartupLocation="CenterOwner">
+
+  <Design.DataContext>
+    <vm:ExportDialogViewModel />
+  </Design.DataContext>
+
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <ScrollViewer Grid.Row="0">
+      <StackPanel Spacing="15">
+        <!-- 导出格式选择 -->
+        <StackPanel>
+          <TextBlock Text="导出格式" FontWeight="Bold" Margin="0,0,0,8" />
+          <ComboBox ItemsSource="{Binding AvailableFormats}"
+                    SelectedItem="{Binding SelectedFormat}"
+                    MinWidth="200">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel>
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Description}" FontSize="11" Foreground="Gray" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+        <!-- 输出路径 -->
+        <StackPanel>
+          <TextBlock Text="输出路径" FontWeight="Bold" Margin="0,0,0,8" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" 
+                     Text="{Binding OutputPath}" 
+                     Watermark="选择导出文件夹..." />
+            <Button Grid.Column="1" 
+                    Content="浏览..." 
+                    Margin="5,0,0,0"
+                    Click="OnBrowseClick" />
+          </Grid>
+        </StackPanel>
+
+        <!-- 导出选项 -->
+        <StackPanel>
+          <TextBlock Text="导出选项" FontWeight="Bold" Margin="0,0,0,8" />
+          
+          <CheckBox Content="包含图像文件" 
+                    IsChecked="{Binding IncludeImages}" 
+                    Margin="0,5" />
+          
+          <CheckBox Content="分割训练/验证集" 
+                    IsChecked="{Binding SplitTrainVal}" 
+                    Margin="0,5" />
+          
+          <StackPanel IsVisible="{Binding SplitTrainVal}" Margin="20,5,0,0">
+            <TextBlock Text="{Binding TrainRatio, StringFormat='训练集比例: {0:P0}'}" 
+                       Margin="0,0,0,5" />
+            <Slider Value="{Binding TrainRatio}" 
+                    Minimum="0.5" 
+                    Maximum="0.95" 
+                    TickFrequency="0.05"
+                    IsSnapToTickEnabled="True" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- 格式说明 -->
+        <Border Background="{DynamicResource SystemControlBackgroundChromeLowBrush}"
+                Padding="10"
+                CornerRadius="5">
+          <StackPanel>
+            <TextBlock Text="格式说明" FontWeight="Bold" Margin="0,0,0,5" />
+            <TextBlock TextWrapping="Wrap" FontSize="12">
+              <Run Text="• COCO: 适用于 Facebook Detectron2, MMDetection" />
+              <LineBreak />
+              <Run Text="• PASCAL VOC: 适用于传统目标检测算法" />
+              <LineBreak />
+              <Run Text="• YOLO: 适用于 YOLOv5, YOLOv8, Ultralytics" />
+              <LineBreak />
+              <Run Text="• TXT: 通用文本格式，便于自定义处理" />
+            </TextBlock>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- 按钮 -->
+    <StackPanel Grid.Row="1" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Right" 
+                Spacing="10"
+                Margin="0,20,0,0">
+      <Button Content="取消" 
+              Click="OnCancelClick" 
+              MinWidth="80" />
+      <Button Content="导出" 
+              Click="OnExportClick" 
+              MinWidth="80"
+              Classes="accent" />
+    </StackPanel>
+  </Grid>
+</Window>

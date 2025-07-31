@@ -1,0 +1,51 @@
+<ContentControl xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:controls="clr-namespace:AIlable.Controls"
+                x:Class="AIlable.Controls.SimpleCollapsiblePanel">
+
+  <StackPanel>
+    <!-- Header Button -->
+    <Button Classes="simple-header" 
+            Click="OnHeaderClick"
+            Padding="0"
+            Background="Transparent"
+            BorderBrush="Transparent"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Left">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Column="0" 
+                   Text="{Binding Title, RelativeSource={RelativeSource AncestorType=controls:SimpleCollapsiblePanel}}"
+                   Classes="primary"
+                   FontWeight="SemiBold"
+                   FontSize="14"
+                   VerticalAlignment="Center"
+                   Margin="0,12" />
+
+        <!-- Expand/Collapse Arrow -->
+        <TextBlock Grid.Column="1" 
+                   x:Name="ExpanderArrow"
+                   Text="▼"
+                   Classes="secondary"
+                   FontSize="10"
+                   VerticalAlignment="Center"
+                   Margin="8,0" />
+      </Grid>
+    </Button>
+
+    <!-- Content -->
+    <Border x:Name="ContentContainer" 
+            IsVisible="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=controls:SimpleCollapsiblePanel}}"
+            Classes="card"
+            Margin="0,0,0,16"
+            Padding="16">
+      <ContentPresenter />
+    </Border>
+  </StackPanel>
+
+</ContentControl>

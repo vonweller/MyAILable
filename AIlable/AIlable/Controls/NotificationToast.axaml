@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:services="clr-namespace:AIlable.Services"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+             x:Class="AIlable.Controls.NotificationToast"
+             x:DataType="services:NotificationService">
+
+    <StackPanel Classes="notification-container">
+        <ItemsControl ItemsSource="{Binding Notifications}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="services:NotificationItem">
+                    <Border Classes="notification-toast"
+                            Classes.success="{Binding Type, Converter={x:Static services:NotificationTypeConverter.IsSuccess}}"
+                            Classes.warning="{Binding Type, Converter={x:Static services:NotificationTypeConverter.IsWarning}}"
+                            Classes.error="{Binding Type, Converter={x:Static services:NotificationTypeConverter.IsError}}"
+                            Classes.info="{Binding Type, Converter={x:Static services:NotificationTypeConverter.IsInfo}}"
+                            Classes.fade-in="{Binding IsVisible}"
+                            Classes.fade-out="{Binding IsVisible, Converter={x:Static services:BooleanInverseConverter.Instance}}"
+                            Name="ToastBorder">
+
+                        <TextBlock Classes="notification-text"
+                                   Text="{Binding Message}" />
+
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+
+</UserControl>

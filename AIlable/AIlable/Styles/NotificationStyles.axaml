@@ -1,0 +1,79 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    <!-- 通知容器样式 -->
+    <Style Selector="StackPanel.notification-container">
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Top"/>
+        <Setter Property="ZIndex" Value="1000"/>
+        <Setter Property="Margin" Value="16,16,16,0"/>
+        <Setter Property="Spacing" Value="12"/>
+    </Style>
+
+    <!-- 通知提示基础样式 -->
+    <Style Selector="Border.notification-toast">
+        <Setter Property="Background" Value="#2D2D30"/>
+        <Setter Property="BorderBrush" Value="#3F3F46"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="16,10"/>
+        <Setter Property="BoxShadow" Value="0 4 16 0 #40000000"/>
+        <Setter Property="MaxWidth" Value="400"/>
+        <Setter Property="MinWidth" Value="200"/>
+        <Setter Property="Opacity" Value="0"/>
+        <Setter Property="RenderTransform" Value="translateY(-20px)"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.3" Easing="CubicEaseOut"/>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- 通知文本样式 -->
+    <Style Selector="TextBlock.notification-text">
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+
+
+    <!-- 显示状态 -->
+    <Style Selector="Border.notification-toast.fade-in">
+        <Setter Property="Opacity" Value="1"/>
+        <Setter Property="RenderTransform" Value="translateY(0px)"/>
+    </Style>
+
+    <!-- 隐藏状态 -->
+    <Style Selector="Border.notification-toast.fade-out">
+        <Setter Property="Opacity" Value="0"/>
+        <Setter Property="RenderTransform" Value="translateY(-20px)"/>
+    </Style>
+
+    <!-- 成功通知样式 -->
+    <Style Selector="Border.notification-toast.success">
+        <Setter Property="Background" Value="#1B5E20"/>
+        <Setter Property="BorderBrush" Value="#2E7D32"/>
+    </Style>
+
+    <!-- 警告通知样式 -->
+    <Style Selector="Border.notification-toast.warning">
+        <Setter Property="Background" Value="#E65100"/>
+        <Setter Property="BorderBrush" Value="#FF9800"/>
+    </Style>
+
+    <!-- 错误通知样式 -->
+    <Style Selector="Border.notification-toast.error">
+        <Setter Property="Background" Value="#B71C1C"/>
+        <Setter Property="BorderBrush" Value="#F44336"/>
+    </Style>
+
+    <!-- 信息通知样式 -->
+    <Style Selector="Border.notification-toast.info">
+        <Setter Property="Background" Value="#0D47A1"/>
+        <Setter Property="BorderBrush" Value="#2196F3"/>
+    </Style>
+</Styles>

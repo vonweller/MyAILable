@@ -1,0 +1,173 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:AIlable.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="500"
+        x:Class="AIlable.Views.AIInferenceDialog"
+        x:DataType="vm:AIInferenceDialogViewModel"
+        Title="AI推理设置"
+        Width="600" Height="500"
+        WindowStartupLocation="CenterOwner"
+        CanResize="true">
+
+  <Design.DataContext>
+    <vm:AIInferenceDialogViewModel />
+  </Design.DataContext>
+
+  <DockPanel Margin="10">
+    <!-- Title -->
+    <TextBlock DockPanel.Dock="Top" 
+               Text="配置AI推理参数" 
+               FontSize="18" 
+               FontWeight="Bold" 
+               Margin="0,0,0,15" />
+
+    <!-- Buttons -->
+    <StackPanel DockPanel.Dock="Bottom" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Right" 
+                Spacing="10" 
+                Margin="0,15,0,0">
+      <Button Content="开始推理" 
+              Command="{Binding StartInferenceCommand}"
+              IsDefault="True"
+              MinWidth="80" />
+      <Button Content="取消" 
+              Command="{Binding CancelCommand}"
+              IsCancel="True"
+              MinWidth="80" />
+    </StackPanel>
+
+    <!-- Main Content -->
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <!-- Model Information -->
+      <Border Grid.Row="0" 
+              Background="{DynamicResource SystemControlBackgroundChromeLowBrush}"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Padding="10"
+              Margin="0,0,0,10">
+        <StackPanel>
+          <TextBlock Text="当前AI模型" FontWeight="SemiBold" Margin="0,0,0,5" />
+          <TextBlock Text="{Binding ModelInfo}" 
+                     Foreground="Gray" 
+                     IsVisible="{Binding HasModel}" />
+          <TextBlock Text="未加载模型，请先加载AI模型" 
+                     Foreground="Red" 
+                     IsVisible="{Binding !HasModel}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Inference Parameters -->
+      <Border Grid.Row="1"
+              Background="{DynamicResource SystemControlBackgroundChromeLowBrush}"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Padding="10"
+              Margin="0,0,0,10">
+        <StackPanel>
+          <TextBlock Text="推理参数" FontWeight="SemiBold" Margin="0,0,0,10" />
+          
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" 
+                       Text="置信度阈值:" 
+                       VerticalAlignment="Center" 
+                       Margin="0,0,10,0" />
+            <Slider Grid.Row="0" Grid.Column="1" 
+                    Value="{Binding ConfidenceThreshold}"
+                    Minimum="0.1" Maximum="1.0" 
+                    TickFrequency="0.1"
+                    IsSnapToTickEnabled="True"
+                    Margin="0,0,10,0" />
+            <TextBlock Grid.Row="0" Grid.Column="2" 
+                       Text="{Binding ConfidenceThreshold, StringFormat=F1}"
+                       VerticalAlignment="Center" 
+                       MinWidth="30" />
+
+            <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                      Content="替换现有标注（清空当前标注后添加AI检测结果）"
+                      IsChecked="{Binding ReplaceExistingAnnotations}"
+                      Margin="0,10,0,0" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Processing Mode -->
+      <Border Grid.Row="2"
+              Background="{DynamicResource SystemControlBackgroundChromeLowBrush}"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Padding="10"
+              Margin="0,0,0,10">
+        <StackPanel>
+          <TextBlock Text="处理模式" FontWeight="SemiBold" Margin="0,0,0,10" />
+          
+          <StackPanel>
+            <RadioButton Content="仅处理当前图像" 
+                         IsChecked="{Binding ProcessCurrentImageOnly}"
+                         Margin="0,0,0,5" />
+            <RadioButton Content="批量处理项目中的所有图像" 
+                         IsChecked="{Binding !ProcessCurrentImageOnly}"
+                         IsEnabled="{Binding HasProject}" />
+            <TextBlock Text="（需要先创建或打开项目）" 
+                       FontSize="10" 
+                       Foreground="Gray" 
+                       IsVisible="{Binding !HasProject}"
+                       Margin="20,0,0,0" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Progress and Status -->
+      <Border Grid.Row="3"
+              Background="{DynamicResource SystemControlBackgroundChromeLowBrush}"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Padding="10">
+        <StackPanel>
+          <TextBlock Text="处理状态" FontWeight="SemiBold" Margin="0,0,0,10" />
+          
+          <ProgressBar Value="{Binding Progress}" 
+                       Maximum="100" 
+                       Height="20" 
+                       IsVisible="{Binding IsProcessing}"
+                       Margin="0,0,0,10" />
+          
+          <TextBlock Text="{Binding StatusMessage}" 
+                     TextWrapping="Wrap"
+                     MinHeight="40" />
+          
+          <ScrollViewer Height="150" 
+                        IsVisible="{Binding HasResults}">
+            <TextBlock Text="{Binding ResultsText}" 
+                       TextWrapping="Wrap" 
+                       FontFamily="Consolas" 
+                       FontSize="10" />
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

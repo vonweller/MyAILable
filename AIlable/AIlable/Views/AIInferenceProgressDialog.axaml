@@ -1,0 +1,186 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AIlable.ViewModels"
+        x:Class="AIlable.Views.AIInferenceProgressDialog"
+        x:DataType="vm:AIInferenceProgressDialogViewModel"
+        Title="{Binding Title}"
+        Width="500"
+        Height="350"
+        MinWidth="450"
+        MinHeight="300"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource SystemAccentColor}"/>
+    </Style>
+    
+    <Style Selector="TextBlock.subtitle">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+    </Style>
+    
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    
+    <Style Selector="ProgressBar.modern">
+      <Setter Property="Height" Value="8"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundBaseLowBrush}"/>
+    </Style>
+    
+    <Style Selector="Button.action">
+      <Setter Property="Padding" Value="20,8"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="MinWidth" Value="100"/>
+    </Style>
+    
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+    
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundBaseLowBrush}"/>
+    </Style>
+    
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#E74C3C"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+  </Window.Styles>
+
+  <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+          Padding="24">
+    <Grid RowDefinitions="Auto,*,Auto">
+      
+      <!-- 标题区域 -->
+      <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,20">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Border Background="{DynamicResource SystemAccentColor}"
+                  CornerRadius="20"
+                  Width="40"
+                  Height="40">
+            <TextBlock Text="🤖"
+                       FontSize="20"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}"
+                       Classes="title"/>
+            <TextBlock Text="{Binding CurrentTask}"
+                       Classes="subtitle"/>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- 主要内容区域 -->
+      <StackPanel Grid.Row="1" Spacing="16">
+        
+        <!-- 当前处理的图像 -->
+        <Border Background="{DynamicResource SystemControlBackgroundBaseLowBrush}"
+                CornerRadius="8"
+                Padding="16">
+          <StackPanel Spacing="8">
+            <TextBlock Text="当前图像"
+                       FontSize="12"
+                       FontWeight="Medium"
+                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+            <TextBlock Text="{Binding CurrentImage}"
+                       FontSize="14"
+                       FontWeight="Medium"
+                       TextTrimming="CharacterEllipsis"/>
+          </StackPanel>
+        </Border>
+
+        <!-- 进度条 -->
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0"
+                       Text="处理进度"
+                       FontSize="12"
+                       FontWeight="Medium"/>
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ProgressText}"
+                       FontSize="12"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource SystemAccentColor}"/>
+          </Grid>
+          
+          <ProgressBar Value="{Binding Progress}"
+                       Maximum="100"
+                       Classes="modern"/>
+          
+          <Grid ColumnDefinitions="*,*,*">
+            <StackPanel Grid.Column="0" Spacing="4">
+              <TextBlock Text="已处理"
+                         FontSize="10"
+                         Classes="subtitle"/>
+              <TextBlock Text="{Binding ProcessedCount}"
+                         FontSize="16"
+                         FontWeight="Bold"
+                         Foreground="{DynamicResource SystemAccentColor}"/>
+            </StackPanel>
+            
+            <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center">
+              <TextBlock Text="总数"
+                         FontSize="10"
+                         Classes="subtitle"/>
+              <TextBlock Text="{Binding TotalCount}"
+                         FontSize="16"
+                         FontWeight="Bold"/>
+            </StackPanel>
+            
+            <StackPanel Grid.Column="2" Spacing="4" HorizontalAlignment="Right">
+              <TextBlock Text="检测对象"
+                         FontSize="10"
+                         Classes="subtitle"/>
+              <TextBlock Text="{Binding DetectedObjects}"
+                         FontSize="16"
+                         FontWeight="Bold"
+                         Foreground="#27AE60"/>
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+
+        <!-- 状态信息 -->
+        <Border Background="{DynamicResource SystemControlBackgroundBaseLowBrush}"
+                CornerRadius="8"
+                Padding="12">
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0"
+                         Text="状态信息"
+                         FontSize="11"
+                         FontWeight="Medium"
+                         Classes="subtitle"/>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding ElapsedTime}"
+                         FontSize="11"
+                         Classes="subtitle"/>
+            </Grid>
+            <TextBlock Text="{Binding StatusMessage}"
+                       Classes="status"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- 提示信息 -->
+      <TextBlock Grid.Row="2"
+                 Text="使用主界面的暂停/停止按钮来控制推理过程"
+                 FontSize="11"
+                 Classes="subtitle"
+                 HorizontalAlignment="Center"
+                 Margin="0,20,0,0"/>
+    </Grid>
+  </Border>
+</Window>
