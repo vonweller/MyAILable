@@ -10,7 +10,7 @@
              x:Class="AIlable.Views.MainView"
              x:DataType="vm:MainViewModel"
              Focusable="True"
-             Background="Transparent">
+             Background="{DynamicResource AppBackgroundBrush}">
 
   <UserControl.KeyBindings>
     <KeyBinding Gesture="Ctrl+F" Command="{Binding FitToWindowCommand}" />
@@ -75,8 +75,8 @@
 
   <DockPanel>
     <!-- Menu Bar -->
-    <Menu DockPanel.Dock="Top" Background="White" Foreground="#2C3E50" Padding="8,6"
-          BorderBrush="#E1E8ED" BorderThickness="0,0,0,1">
+    <Menu DockPanel.Dock="Top" Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource PrimaryTextBrush}" Padding="8,6"
+          BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <MenuItem Header="文件">
         <MenuItem Header="新建项目" Command="{Binding CreateNewProjectCommand}" />
         <MenuItem Header="打开项目..." Command="{Binding OpenProjectCommand}" />
@@ -106,14 +106,14 @@
 
     <!-- Status Bar -->
     <Border DockPanel.Dock="Bottom"
-            Background="#F8F9FA"
-            BorderBrush="#E1E8ED"
+            Background="{DynamicResource PanelBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"
             Padding="12,8">
       <Grid>
         <TextBlock Text="{Binding StatusText}"
                    VerticalAlignment="Center"
-                   Foreground="#2C3E50"
+                   Foreground="{DynamicResource PrimaryTextBrush}"
                    FontWeight="Medium"
                    FontSize="13" />
         <StackPanel Orientation="Horizontal"
@@ -168,8 +168,8 @@
         </Grid.ColumnDefinitions>
 
         <!-- Left Panel - Project Explorer -->
-        <Border Grid.Column="0" Background="White"
-                BorderBrush="#E1E8ED"
+        <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,1,0"
                 IsVisible="{Binding HasProject}">
           <DockPanel Margin="16">
@@ -215,8 +215,8 @@
                          IsVisible="{Binding HasProject}"
                          MinHeight="200"
                          Name="ImageListBox"
-                         Background="White"
-                         BorderBrush="#D0D7DE"
+                         Background="{DynamicResource CardBackgroundBrush}"
+                         BorderBrush="{DynamicResource BorderBrush}"
                          BorderThickness="1"
                          CornerRadius="6"
                          Padding="8">
@@ -271,8 +271,8 @@
             <!-- Placeholder when no project -->
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsVisible="{Binding !HasProject}">
-              <Border Background="White"
-                      BorderBrush="#E1E8ED"
+              <Border Background="{DynamicResource CardBackgroundBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}"
                       BorderThickness="2"
                       CornerRadius="16"
                       Padding="60,40">
@@ -323,8 +323,8 @@
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsVisible="{Binding HasProject}">
               <StackPanel IsVisible="{Binding !HasImage}">
-                <Border Background="White"
-                        BorderBrush="#E1E8ED"
+                <Border Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="2"
                         CornerRadius="16"
                         Padding="60,40">
@@ -365,8 +365,8 @@
         <GridSplitter Grid.Column="3" Width="5" IsVisible="{Binding HasProject}" />
 
         <!-- Right Panel - Tools and Properties -->
-        <Border Grid.Column="4" Background="White"
-                BorderBrush="#E1E8ED"
+        <Border Grid.Column="4" Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1,0,0,0"
                 IsVisible="{Binding HasProject}">
           <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -393,6 +393,7 @@
                   <Button Content="线条" Command="{Binding LineToolCommand}" Classes="tool-button" Margin="2" />
                   <Button Content="点" Command="{Binding PointToolCommand}" Classes="tool-button" Margin="2" />
                   <Button Content="📦 OBB" Command="{Binding OrientedBoundingBoxToolCommand}" Classes="tool-button" Margin="2" ToolTip.Tip="有向边界框" />
+                  <Button Content="🤸 姿态" Command="{Binding KeypointToolCommand}" Classes="tool-button" Margin="2" ToolTip.Tip="关键点姿态标注" />
                 </UniformGrid>
               </Border>
 
@@ -702,7 +703,7 @@
       <Grid IsVisible="{Binding IsAIChatViewActive}">
         <DockPanel>
           <!-- AI聊天顶部栏 -->
-          <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="16,12">
+          <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,12">
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />

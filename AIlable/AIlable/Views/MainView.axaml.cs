@@ -72,6 +72,7 @@ public partial class MainView : UserControl
                 _imageCanvas.PointerClickedOnImage += OnPointerClickedOnImage;
                 _imageCanvas.PointerMovedOnImage += OnPointerMovedOnImage;
                 _imageCanvas.AnnotationSelected += OnAnnotationSelected;
+                _imageCanvas.GetOBBToolRequested += OnGetOBBToolRequested;
 
                 // Bind current drawing annotation to canvas
                 UpdateCurrentDrawingAnnotation();
@@ -184,6 +185,16 @@ public partial class MainView : UserControl
         {
             viewModel.SelectAnnotation(annotation);
         }
+    }
+
+    private AIlable.Services.OrientedBoundingBoxTool? OnGetOBBToolRequested()
+    {
+        // 返回OBB工具实例
+        if (DataContext is MainViewModel viewModel)
+        {
+            return viewModel.ToolManager.GetTool(AIlable.Models.AnnotationTool.OrientedBoundingBox) as AIlable.Services.OrientedBoundingBoxTool;
+        }
+        return null;
     }
     
     private void OnKeyDown(object? sender, KeyEventArgs e)

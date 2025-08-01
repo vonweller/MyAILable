@@ -9,6 +9,7 @@ public enum AnnotationTool
     Line,
     Point,
     OrientedBoundingBox,  // 有向边界框工具
+    Keypoint,            // 关键点姿态工具
     Pan,
     Zoom
 }

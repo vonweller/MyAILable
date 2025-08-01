@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AIlable.ViewModels"
+        xmlns:converters="using:AIlable.Converters"
         x:Class="AIlable.Views.YoloExportDialog"
         x:DataType="vm:YoloExportDialogViewModel"
         Title="YOLO 导出设置"
@@ -38,11 +39,17 @@
             <TextBlock Text="📋 导出格式选择" FontSize="16" FontWeight="SemiBold" />
             
             <StackPanel Spacing="12">
-              <RadioButton Content="分割格式 (Segmentation)" 
-                           IsChecked="{Binding UseSegmentationFormat}" 
+              <RadioButton Content="📦 目标检测 (Detection)" 
+                           IsChecked="{Binding SelectedFormat, Converter={x:Static converters:EnumToBooleanConverter.Instance}, ConverterParameter=Detection}" 
                            FontWeight="SemiBold" />
-              <RadioButton Content="检测格式 (Detection)" 
-                           IsChecked="{Binding !UseSegmentationFormat}" 
+              <RadioButton Content="🎯 实例分割 (Segmentation)" 
+                           IsChecked="{Binding SelectedFormat, Converter={x:Static converters:EnumToBooleanConverter.Instance}, ConverterParameter=Segmentation}" 
+                           FontWeight="SemiBold" />
+              <RadioButton Content="🔄 有向边界框 (OBB)" 
+                           IsChecked="{Binding SelectedFormat, Converter={x:Static converters:EnumToBooleanConverter.Instance}, ConverterParameter=OBB}" 
+                           FontWeight="SemiBold" />
+              <RadioButton Content="🤸 关键点姿态 (Pose)" 
+                           IsChecked="{Binding SelectedFormat, Converter={x:Static converters:EnumToBooleanConverter.Instance}, ConverterParameter=Pose}" 
                            FontWeight="SemiBold" />
             </StackPanel>
             

@@ -129,6 +129,7 @@ public partial class MainViewModel : ViewModelBase
         LineToolCommand = new RelayCommand(() => SetActiveTool(Models.AnnotationTool.Line));
         PointToolCommand = new RelayCommand(() => SetActiveTool(Models.AnnotationTool.Point));
         OrientedBoundingBoxToolCommand = new RelayCommand(() => SetActiveTool(Models.AnnotationTool.OrientedBoundingBox));
+        KeypointToolCommand = new RelayCommand(() => SetActiveTool(Models.AnnotationTool.Keypoint));
         
         // 标签切换命令
         NextLabelCommand = new RelayCommand(NextLabel);
@@ -188,6 +189,7 @@ public partial class MainViewModel : ViewModelBase
     public ICommand LineToolCommand { get; }
     public ICommand PointToolCommand { get; }
     public ICommand OrientedBoundingBoxToolCommand { get; }
+    public ICommand KeypointToolCommand { get; }
     
     // 标签命令
     public ICommand NextLabelCommand { get; }
@@ -245,6 +247,8 @@ public partial class MainViewModel : ViewModelBase
             Models.AnnotationTool.Polygon => "多边形工具",
             Models.AnnotationTool.Line => "线条工具",
             Models.AnnotationTool.Point => "点工具",
+            Models.AnnotationTool.OrientedBoundingBox => "有向边界框工具",
+            Models.AnnotationTool.Keypoint => "关键点姿态工具",
             Models.AnnotationTool.Pan => "平移工具",
             Models.AnnotationTool.Zoom => "缩放工具",
             _ => "未知工具"
@@ -1870,7 +1874,7 @@ public partial class MainViewModel : ViewModelBase
                 return await ExportService.ExportToYoloAsync(
                     project,
                     yoloViewModel.OutputPath,
-                    yoloViewModel.UseSegmentationFormat);
+                    yoloViewModel.SelectedFormat);
             }
 
             return false;

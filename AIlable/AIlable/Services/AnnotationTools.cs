@@ -359,7 +359,8 @@ public class ToolManager
             { Models.AnnotationTool.Line, new LineTool() },
             { Models.AnnotationTool.Point, new PointTool() },
             { Models.AnnotationTool.Polygon, new PolygonTool() },
-            { Models.AnnotationTool.OrientedBoundingBox, new OrientedBoundingBoxTool() }
+            { Models.AnnotationTool.OrientedBoundingBox, new OrientedBoundingBoxTool() },
+            { Models.AnnotationTool.Keypoint, new KeypointTool() }
         };
         
         _activeTool = Models.AnnotationTool.Select;

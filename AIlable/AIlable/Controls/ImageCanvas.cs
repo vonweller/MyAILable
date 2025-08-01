@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -29,7 +30,33 @@ public class ImageCanvas : Control
         AvaloniaProperty.Register<ImageCanvas, bool>(nameof(ShowAnnotations), true);
 
     public static readonly StyledProperty<Annotation?> SelectedAnnotationProperty =
-        AvaloniaProperty.Register<ImageCanvas, Annotation?>(nameof(SelectedAnnotation));
+        AvaloniaProperty.Register<ImageCanvas, Annotation?>(nameof(SelectedAnnotation),
+            coerce: OnSelectedAnnotationCoerce);
+
+    private static Annotation? OnSelectedAnnotationCoerce(AvaloniaObject obj, Annotation? value)
+    {
+        if (obj is ImageCanvas canvas)
+        {
+            // 清除所有标注的选中状态
+            if (canvas.Annotations != null)
+            {
+                foreach (var annotation in canvas.Annotations)
+                {
+                    annotation.IsSelected = false;
+                }
+            }
+            
+            // 设置新选中标注的状态
+            if (value != null)
+            {
+                value.IsSelected = true;
+            }
+            
+            // 触发重绘
+            canvas.InvalidateVisual();
+        }
+        return value;
+    }
 
     public static readonly StyledProperty<Annotation?> CurrentDrawingAnnotationProperty =
         AvaloniaProperty.Register<ImageCanvas, Annotation?>(nameof(CurrentDrawingAnnotation),
@@ -48,6 +75,9 @@ public class ImageCanvas : Control
     private Point _lastPointerPosition;
     private bool _isPanning;
     private bool _isPointerPressed;
+    private bool _isRotatingOBB = false;
+    private OrientedBoundingBoxAnnotation? _rotatingOBB = null;
+    private OrientedBoundingBoxTool? _obbTool = null;
 
     public Bitmap? Image
     {
@@ -91,10 +121,15 @@ public class ImageCanvas : Control
         set => SetValue(CurrentDrawingAnnotationProperty, value);
     }
 
-    // Events
+    // Events for view interaction
+    public event System.Action? FitToWindowRequested;
+    public event System.Action? ResetViewRequested;
     public event EventHandler<Point2D>? PointerClickedOnImage;
     public event EventHandler<Point2D>? PointerMovedOnImage;
     public event EventHandler<Annotation>? AnnotationSelected;
+    
+    // 新增：获取工具管理器的事件
+    public event Func<OrientedBoundingBoxTool?>? GetOBBToolRequested;
 
     static ImageCanvas()
     {
@@ -174,6 +209,12 @@ public class ImageCanvas : Control
             case PolygonAnnotation polygon:
                 DrawPolygon(context, polygon, imageRect, pen, brush);
                 break;
+            case OrientedBoundingBoxAnnotation obb:
+                DrawOrientedBoundingBox(context, obb, imageRect, pen, brush, isDrawing);
+                break;
+            case KeypointAnnotation keypoint:
+                DrawKeypoints(context, keypoint, imageRect, pen, brush, isDrawing);
+                break;
         }
         
         // 绘制标签文本
@@ -227,6 +268,15 @@ public class ImageCanvas : Control
             case CircleAnnotation circle:
                 var radius = circle.Radius * ZoomFactor;
                 return new Point(center.X - 20, center.Y - radius - 18); // 圆形上方
+            case OrientedBoundingBoxAnnotation obb:
+                // OBB标签显示在旋转后边界框的上方
+                var obbPoints = obb.GetPoints();
+                if (obbPoints.Count >= 4)
+                {
+                    var topY = obbPoints.Min(p => ImageToScreen(p, imageRect).Y);
+                    return new Point(center.X - 20, topY - 18);
+                }
+                return new Point(center.X - 20, center.Y - 18);
             default:
                 return new Point(center.X - 20, center.Y - 18); // 默认位置
         }
@@ -351,6 +401,175 @@ public class ImageCanvas : Control
         }
     }
 
+    private void DrawOrientedBoundingBox(DrawingContext context, OrientedBoundingBoxAnnotation obb, Rect imageRect, Pen pen, IBrush? brush, bool isDrawing = false)
+    {
+        var obbPoints = obb.GetPoints();
+        if (obbPoints.Count < 4) return;
+
+        // Convert OBB points to screen coordinates
+        var screenPoints = new List<Point>();
+        foreach (var point in obbPoints)
+        {
+            screenPoints.Add(ImageToScreen(point, imageRect));
+        }
+
+        // Draw the rotated rectangle
+        var geometry = new PolylineGeometry(screenPoints, true);
+        context.DrawGeometry(brush, pen, geometry);
+
+        // Draw corner control points and rotation handle when selected or being drawn
+        if (obb.IsSelected || obb == CurrentDrawingAnnotation || isDrawing)
+        {
+            // Draw corner control points
+            var cornerBrush = new SolidColorBrush(Colors.White);
+            var cornerPen = new Pen(new SolidColorBrush(Colors.Black), 1);
+
+            foreach (var screenPoint in screenPoints)
+            {
+                var cornerRect = new Rect(screenPoint.X - 4, screenPoint.Y - 4, 8, 8);
+                context.DrawEllipse(cornerBrush, cornerPen, cornerRect);
+            }
+
+            // Draw rotation handle - a small circle above the center
+            var center = ImageToScreen(obb.GetCenter(), imageRect);
+            var rotationHandleOffset = 30; // Distance above center
+            var rotationHandlePoint = new Point(center.X, center.Y - rotationHandleOffset);
+            
+            // Draw line from center to rotation handle
+            var handleLinePen = new Pen(pen.Brush, 1) { DashStyle = DashStyle.Dash };
+            context.DrawLine(handleLinePen, center, rotationHandlePoint);
+            
+            // Draw rotation handle circle
+            var rotationHandleBrush = new SolidColorBrush(Colors.LightBlue);
+            var rotationHandlePen = new Pen(new SolidColorBrush(Colors.Blue), 2);
+            var rotationHandleRect = new Rect(rotationHandlePoint.X - 6, rotationHandlePoint.Y - 6, 12, 12);
+            context.DrawEllipse(rotationHandleBrush, rotationHandlePen, rotationHandleRect);
+
+            // Draw center point
+            var centerBrush = new SolidColorBrush(Colors.Red);
+            var centerPen = new Pen(new SolidColorBrush(Colors.DarkRed), 1);
+            var centerRect = new Rect(center.X - 3, center.Y - 3, 6, 6);
+            context.DrawEllipse(centerBrush, centerPen, centerRect);
+
+            // Draw angle display text
+            var angleText = $"{obb.Angle:F1}°";
+            var typeface = new Typeface("Microsoft YaHei", FontStyle.Normal, FontWeight.Bold);
+            var formattedAngleText = new FormattedText(
+                angleText,
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                12,
+                new SolidColorBrush(Colors.White));
+
+            // Position angle text near the rotation handle
+            var angleTextPosition = new Point(rotationHandlePoint.X + 15, rotationHandlePoint.Y - 8);
+            
+            // Draw semi-transparent background for angle text
+            var angleTextBackground = new Rect(
+                angleTextPosition.X - 2,
+                angleTextPosition.Y - 2,
+                angleText.Length * 7 + 4,
+                16);
+            var angleBgBrush = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0));
+            context.DrawRectangle(angleBgBrush, null, angleTextBackground);
+            
+            // Draw angle text
+            context.DrawText(formattedAngleText, angleTextPosition);
+        }
+    }
+
+    private void DrawKeypoints(DrawingContext context, KeypointAnnotation keypoint, Rect imageRect, Pen pen, IBrush? brush, bool isDrawing = false)
+    {
+        // 绘制骨骼连接线（如果启用）
+        if (keypoint.ShowSkeleton)
+        {
+            DrawSkeleton(context, keypoint, imageRect, pen);
+        }
+
+        // 绘制关键点
+        foreach (var kp in keypoint.Keypoints)
+        {
+            if (kp.Visibility == KeypointVisibility.NotAnnotated) continue;
+
+            var screenPos = ImageToScreen(kp.Position, imageRect);
+            var radius = 4.0; // 关键点半径
+
+            // 根据可见性状态选择颜色
+            IBrush keypointBrush;
+            Pen keypointPen;
+
+            switch (kp.Visibility)
+            {
+                case KeypointVisibility.Visible:
+                    keypointBrush = new SolidColorBrush(Colors.LimeGreen);
+                    keypointPen = new Pen(new SolidColorBrush(Colors.DarkGreen), 2);
+                    break;
+                case KeypointVisibility.Occluded:
+                    keypointBrush = new SolidColorBrush(Colors.Orange);
+                    keypointPen = new Pen(new SolidColorBrush(Colors.DarkOrange), 2);
+                    break;
+                default:
+                    continue;
+            }
+
+            // 绘制关键点圆圈
+            var keypointRect = new Rect(screenPos.X - radius, screenPos.Y - radius, radius * 2, radius * 2);
+            context.DrawEllipse(keypointBrush, keypointPen, keypointRect);
+
+            // 在选中或绘制状态下显示关键点编号
+            if (keypoint.IsSelected || keypoint == CurrentDrawingAnnotation || isDrawing)
+            {
+                var typeface = new Typeface("Arial", FontStyle.Normal, FontWeight.Bold);
+                var text = new FormattedText(kp.Id.ToString(), 
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    10,
+                    new SolidColorBrush(Colors.White));
+
+                var textPos = new Point(screenPos.X - 5, screenPos.Y - 15);
+                context.DrawText(text, textPos);
+            }
+        }
+    }
+
+    private void DrawSkeleton(DrawingContext context, KeypointAnnotation keypoint, Rect imageRect, Pen pen)
+    {
+        // COCO骨骼连接定义（调整为基于0的索引）
+        var skeleton = new int[,]
+        {
+            {15, 13}, {13, 11}, {16, 14}, {14, 12}, {11, 12},  // 腿部
+            {5, 11}, {6, 12}, {5, 6},                          // 躯干
+            {5, 7}, {6, 8}, {7, 9}, {8, 10},                  // 手臂
+            {1, 2}, {0, 1}, {0, 2}, {1, 3}, {2, 4}, {3, 5}, {4, 6}  // 头部
+        };
+
+        var penBrush = pen.Brush as SolidColorBrush ?? new SolidColorBrush(Colors.Blue);
+        var skeletonPen = new Pen(new SolidColorBrush(penBrush.Color) { Opacity = 0.7 }, 2);
+
+        for (int i = 0; i < skeleton.GetLength(0); i++)
+        {
+            var point1Index = skeleton[i, 0];
+            var point2Index = skeleton[i, 1];
+
+            if (point1Index < keypoint.Keypoints.Count && point2Index < keypoint.Keypoints.Count)
+            {
+                var kp1 = keypoint.Keypoints[point1Index];
+                var kp2 = keypoint.Keypoints[point2Index];
+
+                // 只有当两个关键点都可见时才绘制连接线
+                if (kp1.Visibility == KeypointVisibility.Visible && kp2.Visibility == KeypointVisibility.Visible)
+                {
+                    var screenPos1 = ImageToScreen(kp1.Position, imageRect);
+                    var screenPos2 = ImageToScreen(kp2.Position, imageRect);
+
+                    context.DrawLine(skeletonPen, screenPos1, screenPos2);
+                }
+            }
+        }
+    }
+
     private Point ImageToScreen(Point2D imagePoint, Rect imageRect)
     {
         return new Point(
@@ -416,6 +635,17 @@ public class ImageCanvas : Control
                 PanOffset = new Point(PanOffset.X + delta.X, PanOffset.Y + delta.Y);
                 InvalidateVisual();
             }
+            else if (_isRotatingOBB && _rotatingOBB != null && _obbTool != null)
+            {
+                // 处理OBB旋转
+                if (Image != null)
+                {
+                    var imageRect = new Rect(PanOffset, new Size(Image.Size.Width * ZoomFactor, Image.Size.Height * ZoomFactor));
+                    var imagePoint = ScreenToImage(position, imageRect);
+                    _obbTool.UpdateRotation(_rotatingOBB, imagePoint);
+                    InvalidateVisual();
+                }
+            }
         }
 
         // Always notify about mouse movement for drawing tools
@@ -438,6 +668,15 @@ public class ImageCanvas : Control
 
         _isPointerPressed = false;
         _isPanning = false;
+        
+        // 结束OBB旋转操作
+        if (_isRotatingOBB && _obbTool != null)
+        {
+            _obbTool.EndRotation();
+            _isRotatingOBB = false;
+            _rotatingOBB = null;
+        }
+        
         Cursor = Cursor.Default;
     }
 
@@ -465,6 +704,12 @@ public class ImageCanvas : Control
 
         var imagePoint = ScreenToImage(position, imageRect);
         
+        // 首先检查是否点击了OBB或关键点的特殊控制点
+        if (HandleSpecialInteraction(imagePoint))
+        {
+            return;
+        }
+        
         // Check for annotation selection first
         var clickedAnnotation = FindAnnotationAtPoint(imagePoint);
         if (clickedAnnotation != null)
@@ -481,6 +726,59 @@ public class ImageCanvas : Control
         PointerClickedOnImage?.Invoke(this, imagePoint);
 
         InvalidateVisual();
+    }
+
+    /// <summary>
+    /// 处理OBB旋转和关键点拖拽等特殊交互
+    /// </summary>
+    private bool HandleSpecialInteraction(Point2D imagePoint)
+    {
+        if (Annotations == null) return false;
+
+        // 检查是否点击了OBB的旋转控制柄
+        foreach (var annotation in Annotations)
+        {
+            if (annotation is OrientedBoundingBoxAnnotation obb && obb.IsSelected)
+            {
+                // 获取OBB工具
+                _obbTool = GetOBBToolRequested?.Invoke();
+                if (_obbTool != null)
+                {
+                    // 检查是否点击了旋转控制柄
+                    if (_obbTool.IsPointOnRotationHandle(obb, imagePoint, ZoomFactor))
+                    {
+                        // 开始旋转操作
+                        _isRotatingOBB = true;
+                        _rotatingOBB = obb;
+                        _obbTool.StartRotation(obb, imagePoint);
+                        Cursor = new Cursor(StandardCursorType.Hand);
+                        return true;
+                    }
+                    
+                    // 检查是否点击了角点控制柄
+                    var cornerIndex = _obbTool.GetCornerHandleIndex(obb, imagePoint, ZoomFactor);
+                    if (cornerIndex >= 0)
+                    {
+                        // 这里可以添加角点拖拽调整大小的逻辑
+                        // 暂时不实现，专注于旋转功能
+                        return true;
+                    }
+                }
+            }
+            else if (annotation is KeypointAnnotation keypoint && keypoint.IsSelected) 
+            {
+                // 检查是否点击了关键点
+                var nearestKeypoint = keypoint.GetNearestKeypoint(imagePoint);
+                if (nearestKeypoint != null)
+                {
+                    // 开始拖拽关键点
+                    // 这里需要设置拖拽状态
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private Annotation? FindAnnotationAtPoint(Point2D point)

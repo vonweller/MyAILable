@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using AIlable.Models;
+using AIlable.ViewModels;
 
 namespace AIlable.Services;
 
@@ -384,6 +385,41 @@ public static class ExportService
                                 pointRadius * 2
                             };
                             break;
+
+                        case KeypointAnnotation keypoint:
+                            // COCO关键点格式
+                            var keypointData = new List<double>();
+                            var visibleKeypoints = keypoint.Keypoints.Where(k => k.Visibility != KeypointVisibility.NotAnnotated).ToList();
+                            
+                            // 添加所有17个关键点的坐标和可见性
+                            foreach (var kp in keypoint.Keypoints)
+                            {
+                                keypointData.Add(kp.Position.X);
+                                keypointData.Add(kp.Position.Y);
+                                keypointData.Add((double)kp.Visibility);
+                            }
+                            
+                            // COCO格式的关键点数据存储在keypoints字段中，但由于我们使用通用CocoAnnotation类，
+                            // 这里我们将关键点数据存储在segmentation中作为特殊格式
+                            cocoAnnotation.Segmentation.Add(keypointData);
+                            
+                            // 计算关键点的边界框
+                            if (visibleKeypoints.Any())
+                            {
+                                var keypointMinX = visibleKeypoints.Min(k => k.Position.X);
+                                var keypointMinY = visibleKeypoints.Min(k => k.Position.Y);
+                                var keypointMaxX = visibleKeypoints.Max(k => k.Position.X);
+                                var keypointMaxY = visibleKeypoints.Max(k => k.Position.Y);
+                                cocoAnnotation.Bbox = new List<double> { keypointMinX, keypointMinY, keypointMaxX - keypointMinX, keypointMaxY - keypointMinY };
+                            }
+                            else
+                            {
+                                cocoAnnotation.Bbox = new List<double> { 0, 0, 0, 0 };
+                            }
+                            
+                            // 设置关键点的面积和数量信息
+                            cocoAnnotation.Area = keypoint.GetArea();
+                            break;
                     }
 
                     cocoDataset.Annotations.Add(cocoAnnotation);
@@ -434,6 +470,13 @@ public static class ExportService
             Console.WriteLine($"Stack trace: {ex.StackTrace}");
             return false;
         }
+    }
+
+    public static async Task<bool> ExportToYoloAsync(AnnotationProject project, string outputDirectory, YoloExportFormat format, float trainRatio = 0.8f)
+    {
+        // 为了向后兼容，将新格式转换为原来的参数
+        bool useSegmentationFormat = format == YoloExportFormat.Segmentation;
+        return await ExportToYoloAsync(project, outputDirectory, useSegmentationFormat, trainRatio);
     }
 
     public static async Task<bool> ExportToYoloAsync(AnnotationProject project, string outputDirectory, bool useSegmentationFormat = true, float trainRatio = 0.8f)
@@ -634,6 +677,12 @@ public static class ExportService
                         var pointHeight = (pointSize * 2) / image.Height;
 
                         labelLines.Add($"{classIndex} {pointCenterX:F6} {pointCenterY:F6} {pointWidth:F6} {pointHeight:F6}");
+                        break;
+
+                    case KeypointAnnotation keypoint:
+                        // YOLO Pose格式: class_id x1 y1 v1 x2 y2 v2 ... x17 y17 v17
+                        var keypointLine = keypoint.ToYoloPoseFormat(image.Width, image.Height, classNames.ToDictionary(name => name, name => classNames.IndexOf(name)));
+                        labelLines.Add(keypointLine);
                         break;
                 }
             }
@@ -857,6 +906,33 @@ public static class ExportService
                                     Ymax = (int)(point.Position.Y + pointRadius)
                                 }
                             };
+                            break;
+
+                        case KeypointAnnotation keypoint:
+                            // VOC格式不直接支持关键点，将其转换为边界框
+                            var visibleKeypointsVoc = keypoint.Keypoints.Where(k => k.Visibility != KeypointVisibility.NotAnnotated).ToList();
+                            if (visibleKeypointsVoc.Any())
+                            {
+                                var vocMinX = visibleKeypointsVoc.Min(k => k.Position.X);
+                                var vocMinY = visibleKeypointsVoc.Min(k => k.Position.Y);
+                                var vocMaxX = visibleKeypointsVoc.Max(k => k.Position.X);
+                                var vocMaxY = visibleKeypointsVoc.Max(k => k.Position.Y);
+
+                                vocObject = new VocObject
+                                {
+                                    Name = cleanLabel,
+                                    Pose = "Person", // 姿态标注通常是人体
+                                    Truncated = 0,
+                                    Difficult = 0,
+                                    BndBox = new VocBndBox
+                                    {
+                                        Xmin = (int)vocMinX,
+                                        Ymin = (int)vocMinY,
+                                        Xmax = (int)vocMaxX,
+                                        Ymax = (int)vocMaxY
+                                    }
+                                };
+                            }
                             break;
                     }
 

@@ -9,7 +9,8 @@ public enum AnnotationType
     Point,
     Polyline,
     Ellipse,
-    OrientedBoundingBox  // 有向边界框 (OBB)
+    OrientedBoundingBox,  // 有向边界框 (OBB)
+    Keypoint             // 关键点姿态标注
 }
 
 public enum AnnotationState
