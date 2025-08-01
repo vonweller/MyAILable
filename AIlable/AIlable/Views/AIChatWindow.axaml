@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:AIlable.ViewModels"
+        xmlns:views="clr-namespace:AIlable.Views"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="AIlable.Views.AIChatWindow"
+        x:DataType="vm:AIChatViewModel"
+        Title="AI聊天助手 - AIlable"
+        Width="1200" Height="800"
+        MinWidth="900" MinHeight="700"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/avalonia-logo.ico">
+
+  <Design.DataContext>
+    <vm:AIChatViewModel />
+  </Design.DataContext>
+
+  <Window.Styles>
+    <!-- 窗口样式 -->
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundAltHighBrush}" />
+    </Style>
+
+    <!-- 标题栏样式 -->
+    <Style Selector="Window[WindowState=Maximized]">
+      <Setter Property="Padding" Value="8" />
+    </Style>
+  </Window.Styles>
+
+  <Grid>
+    <views:AIChatView />
+  </Grid>
+</Window>

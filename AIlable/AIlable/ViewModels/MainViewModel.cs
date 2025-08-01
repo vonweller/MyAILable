@@ -68,6 +68,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly AIModelManager _aiModelManager;
     private readonly PerformanceMonitorService _performanceMonitor;
     private readonly UserExperienceService _userExperienceService;
+    private readonly SmartToolSwitchingService _smartToolSwitching;
     private IFileDialogService? _fileDialogService;
 
     public MainViewModel()
@@ -89,6 +90,7 @@ public partial class MainViewModel : ViewModelBase
         _aiModelManager = new AIModelManager();
         _performanceMonitor = new PerformanceMonitorService();
         _userExperienceService = new UserExperienceService();
+        _smartToolSwitching = new SmartToolSwitchingService(_toolManager);
         
         LoadImageCommand = new AsyncRelayCommand(LoadImageAsync);
         CreateNewProjectCommand = new AsyncRelayCommand(CreateNewProjectAsync);
@@ -140,6 +142,9 @@ public partial class MainViewModel : ViewModelBase
         // 图像导航命令
         NextImageCommand = new RelayCommand(NextImage);
         PreviousImageCommand = new RelayCommand(PreviousImage);
+        
+        // AI聊天命令
+        OpenAIChatCommand = new AsyncRelayCommand(OpenAIChatAsync);
 
         // Subscribe to tool manager events
         _toolManager.ActiveToolChanged += OnActiveToolChangedInternal;
@@ -191,6 +196,9 @@ public partial class MainViewModel : ViewModelBase
 
     // 主题命令
     public ICommand ToggleThemeCommand { get; }
+    
+    // AI聊天命令
+    public ICommand OpenAIChatCommand { get; }
     
     // 图像导航命令
     public ICommand NextImageCommand { get; }
@@ -551,7 +559,7 @@ public partial class MainViewModel : ViewModelBase
                     LoadImageByIndex(0);
 
                     // 延迟一点确保图像加载完成后自动适应窗口
-                    System.Threading.Tasks.Task.Delay(150).ContinueWith(_ =>
+                    _ = System.Threading.Tasks.Task.Delay(150).ContinueWith(_ =>
                     {
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
@@ -1025,6 +1033,12 @@ public partial class MainViewModel : ViewModelBase
                     ? $"AI模型配置完成: {_aiModelManager.GetModelInfo()}"
                     : "AI模型配置完成";
 
+                // 设置智能工具切换的模型类型
+                if (_aiModelManager.HasActiveModel && _aiModelManager.ActiveModel != null)
+                {
+                    _smartToolSwitching.SetCurrentModelType(_aiModelManager.ActiveModel.ModelType);
+                }
+
                 // 通知界面更新AI模型状态
                 OnPropertyChanged(nameof(AIModelStatus));
                 OnPropertyChanged(nameof(HasAIModel));
@@ -1175,6 +1189,14 @@ public partial class MainViewModel : ViewModelBase
 
                     // 对单张图像进行推理
                     var annotations = await _aiModelManager.InferImageAsync(image.FilePath, 0.5f);
+
+                    // 智能工具切换 - 根据推理结果切换到合适的工具
+                    if (annotations.Any())
+                    {
+                        _smartToolSwitching.SwitchToolBasedOnInferenceResult(annotations);
+                        var toolSuggestion = _smartToolSwitching.GetToolSwitchSuggestion(annotations);
+                        Console.WriteLine($"工具建议: {toolSuggestion}");
+                    }
 
                     // 添加推理结果到图像
                     foreach (var annotation in annotations)
@@ -2192,6 +2214,35 @@ public partial class MainViewModel : ViewModelBase
             IsAnnotationPaused = false;
             AnnotationProgress = 0;
             AnnotationProgressText = "";
+        }
+    }
+
+    
+    private async Task OpenAIChatAsync()
+    {
+        try
+        {
+            // 创建AI聊天窗口
+            var chatWindow = new Views.AIChatWindow(_fileDialogService!);
+            
+            // 获取父窗口
+            var parentWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                ? desktop.MainWindow
+                : null;
+
+            if (parentWindow != null)
+            {
+                // 设置窗口所有者，使其显示在主窗口前面
+                await chatWindow.ShowDialog(parentWindow);
+            }
+            else
+            {
+                chatWindow.Show();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"打开AI聊天失败: {ex.Message}";
         }
     }
 

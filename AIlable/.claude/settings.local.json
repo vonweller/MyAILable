@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build)",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet build:*)",
+      "WebFetch(domain:help.aliyun.com)",
+      "Bash(dotnet new:*)",
+      "Bash(rmdir:*)",
+      "Bash(rm:*)",
+      "Bash(timeout:*)"
+    ],
+    "deny": []
+  }
+}

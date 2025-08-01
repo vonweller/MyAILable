@@ -17,8 +17,9 @@ public class AIModelManager
     {
         _modelServices = new Dictionary<AIModelType, IAIModelService>
         {
-            { AIModelType.YOLO, new YoloModelService() }
-            // 可以添加更多模型类型
+            { AIModelType.YOLO, new YoloModelService() },
+            { AIModelType.SegmentAnything, new SegmentationModelService() },
+            { AIModelType.Custom, new OBBModelService() } // OBB模型使用Custom类型
         };
     }
     

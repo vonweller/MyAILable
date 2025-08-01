@@ -1,0 +1,323 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:AIlable.ViewModels"
+             xmlns:models="clr-namespace:AIlable.Models"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="AIlable.Views.AIChatView"
+             x:DataType="vm:AIChatViewModel"
+             Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+
+  <Design.DataContext>
+    <vm:AIChatViewModel />
+  </Design.DataContext>
+
+  <UserControl.Styles>
+    <!-- 聊天消息样式 -->
+    <Style Selector="Border.user-message">
+      <Setter Property="Background" Value="#E3F2FD" />
+      <Setter Property="CornerRadius" Value="12,12,4,12" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Margin" Value="40,4,8,4" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+    <Style Selector="Border.assistant-message">
+      <Setter Property="Background" Value="#F5F5F5" />
+      <Setter Property="CornerRadius" Value="12,12,12,4" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Margin" Value="8,4,40,4" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Border.system-message">
+      <Setter Property="Background" Value="#FFF3E0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="Margin" Value="20,4" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 输入框样式 -->
+    <Style Selector="TextBox.chat-input">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#E0E0E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="20" />
+      <Setter Property="Padding" Value="16,12" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="MinHeight" Value="44" />
+    </Style>
+
+    <Style Selector="TextBox.chat-input:focus">
+      <Setter Property="BorderBrush" Value="#2196F3" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!-- 按钮样式 -->
+    <Style Selector="Button.chat-button">
+      <Setter Property="Background" Value="#2196F3" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="20" />
+      <Setter Property="Padding" Value="16,8" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+
+    <Style Selector="Button.chat-button:pointerover">
+      <Setter Property="Background" Value="#1976D2" />
+    </Style>
+
+    <Style Selector="Button.chat-button:disabled">
+      <Setter Property="Background" Value="#CCCCCC" />
+    </Style>
+
+    <!-- 配置面板样式 -->
+    <Style Selector="Border.config-panel">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#E0E0E0" />
+      <Setter Property="BorderThickness" Value="1,0,0,0" />
+      <Setter Property="MinWidth" Value="280" />
+      <Setter Property="MaxWidth" Value="320" />
+    </Style>
+
+    <!-- 流式消息动画 -->
+    <Style Selector="TextBlock.streaming">
+      <Style.Animations>
+        <Animation Duration="0:0:1" IterationCount="INFINITE">
+          <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="0.7" />
+          </KeyFrame>
+          <KeyFrame Cue="50%">
+            <Setter Property="Opacity" Value="1.0" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="0.7" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" MinWidth="400" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+
+    <!-- 主聊天区域 -->
+    <Grid Grid.Column="0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- 顶部工具栏 -->
+      <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="16,12">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+            <TextBlock Text="🤖 AI助手聊天" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Border Background="#4CAF50" CornerRadius="12" Padding="8,4" IsVisible="{Binding IsConfigured}">
+              <TextBlock Text="✓ 已连接" FontSize="12" Foreground="White" />
+            </Border>
+            <Border Background="#FF9800" CornerRadius="12" Padding="8,4" IsVisible="{Binding !IsConfigured}">
+              <TextBlock Text="⚠ 未配置" FontSize="12" Foreground="White" />
+            </Border>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <Button Content="💾 保存" Command="{Binding SaveChatCommand}" Classes="secondary" Padding="8,6" />
+            <Button Content="🗑️ 清空" Command="{Binding ClearChatCommand}" Classes="secondary" Padding="8,6" />
+            <Button Content="⚙️" Command="{Binding ToggleConfigPanelCommand}" Classes="secondary" Padding="8,6" ToolTip.Tip="配置" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 聊天消息区域 -->
+      <ScrollViewer Grid.Row="1" Name="ChatScrollViewer" VerticalScrollBarVisibility="Auto">
+        <ItemsControl ItemsSource="{Binding Messages}" Padding="16">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="models:ChatMessage">
+              <StackPanel Margin="0,8">
+                <!-- 用户消息 -->
+                <Border Classes="user-message" IsVisible="{Binding IsUser}">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
+                    <!-- 图片预览 -->
+                    <Image Source="{Binding ImageFilePath}" MaxHeight="200" MaxWidth="300" 
+                           Margin="0,8,0,0" IsVisible="{Binding HasImage}" />
+                    <!-- 文件信息 -->
+                    <Border Background="#F0F0F0" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
+                            IsVisible="{Binding HasFile}">
+                      <TextBlock Text="{Binding FileName, StringFormat='📎 {0}'}" FontSize="12" />
+                    </Border>
+                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm}'}" 
+                               FontSize="10" Foreground="#666" HorizontalAlignment="Right" Margin="0,4,0,0" />
+                  </StackPanel>
+                </Border>
+
+                <!-- AI消息 -->
+                <Border Classes="assistant-message" IsVisible="{Binding IsAssistant}">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                      <TextBlock Text="🤖" Margin="0,0,6,0" />
+                      <TextBlock Text="AI助手" FontWeight="Medium" FontSize="12" Foreground="#666" />
+                      <Border Background="#E8F5E8" CornerRadius="8" Padding="4,2" Margin="8,0,0,0" 
+                              IsVisible="{Binding IsStreaming}">
+                        <TextBlock Text="输入中..." FontSize="10" Foreground="#4CAF50" Classes="streaming" />
+                      </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm}'}" 
+                               FontSize="10" Foreground="#666" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- 输入区域 -->
+      <Border Grid.Row="2" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="16">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <!-- 状态栏 -->
+          <TextBlock Grid.Row="0" Text="{Binding StatusText}" FontSize="12" Foreground="#666" Margin="0,0,0,8" />
+
+          <!-- 输入控件 -->
+          <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 附件按钮 -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="0,0,12,0" VerticalAlignment="Bottom">
+              <Button Content="📷" Command="{Binding AttachImageCommand}" 
+                      Classes="secondary" Padding="10,8" ToolTip.Tip="添加图片" />
+              <Button Content="📎" Command="{Binding AttachFileCommand}" 
+                      Classes="secondary" Padding="10,8" ToolTip.Tip="添加文件" />
+            </StackPanel>
+
+            <!-- 输入框 -->
+            <TextBox Grid.Column="1" Classes="chat-input" 
+                     Text="{Binding InputText}" 
+                     Watermark="输入消息... (Ctrl+Enter发送)"
+                     AcceptsReturn="True"
+                     MaxHeight="120">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendMessageCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+
+            <!-- 发送/取消按钮 -->
+            <Button Grid.Column="2" Classes="chat-button" Margin="12,0,0,0" VerticalAlignment="Bottom"
+                    Command="{Binding SendMessageCommand}" IsVisible="{Binding !IsLoading}">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="发送" />
+                <TextBlock Text="📤" />
+              </StackPanel>
+            </Button>
+
+            <Button Grid.Column="2" Classes="danger" Margin="12,0,0,0" VerticalAlignment="Bottom"
+                    Command="{Binding CancelRequestCommand}" IsVisible="{Binding IsLoading}">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="取消" />
+                <TextBlock Text="⏹️" />
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- 右侧配置面板 -->
+    <Border Grid.Column="1" Classes="config-panel" IsVisible="{Binding IsConfigPanelVisible}">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
+        <StackPanel Spacing="16" Margin="8">
+        <TextBlock Text="⚙️ AI配置" FontSize="16" FontWeight="SemiBold" />
+
+        <!-- 提供商选择 -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="AI提供商" FontWeight="Medium" />
+          <ComboBox ItemsSource="{Binding AvailableProviders}" 
+                    SelectedItem="{Binding SelectedProvider}"
+                    DisplayMemberBinding="{Binding DisplayName}"
+                    HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- 提供商配置 -->
+        <StackPanel Spacing="12" IsVisible="{Binding SelectedProvider, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <Separator />
+          
+          <StackPanel Spacing="8">
+            <TextBlock Text="API地址" FontWeight="Medium" />
+            <TextBox Text="{Binding SelectedProvider.ApiUrl}" Watermark="API URL" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="API Key" FontWeight="Medium" />
+            <TextBox Text="{Binding SelectedProvider.ApiKey}" Watermark="API Key (必填)" 
+                     PasswordChar="*" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="模型" FontWeight="Medium" />
+            <TextBox Text="{Binding SelectedProvider.Model}" Watermark="模型名称" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding SelectedProvider.Temperature, StringFormat='温度: {0:F1}'}" FontWeight="Medium" />
+            <Slider Value="{Binding SelectedProvider.Temperature}" Minimum="0" Maximum="2" 
+                    TickFrequency="0.1" IsSnapToTickEnabled="True" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding SelectedProvider.MaxTokens, StringFormat='最大令牌: {0}'}" FontWeight="Medium" />
+            <Slider Value="{Binding SelectedProvider.MaxTokens}" Minimum="100" Maximum="8000" 
+                    TickFrequency="100" IsSnapToTickEnabled="True" />
+          </StackPanel>
+
+          <Button Content="🔧 应用配置" Command="{Binding ConfigureProviderCommand}" 
+                  Classes="accent" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <Separator />
+
+        <!-- 使用说明 -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="💡 使用说明" FontWeight="Medium" />
+          <TextBlock Text="• 支持文本、图片和文件输入" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+          <TextBlock Text="• Ctrl+Enter 快速发送消息" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+          <TextBlock Text="• 支持流式回答显示" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+          <TextBlock Text="• 可保存聊天记录为文件" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- 预设提供商 -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="🚀 快速配置" FontWeight="Medium" />
+          <Button Content="Ollama (本地)" Classes="secondary" HorizontalAlignment="Stretch" 
+                  Command="{Binding ConfigureProviderCommand}" CommandParameter="ollama" />
+          <Button Content="OpenAI GPT" Classes="secondary" HorizontalAlignment="Stretch" 
+                  Command="{Binding ConfigureProviderCommand}" CommandParameter="openai" />
+          <Button Content="阿里云通义" Classes="secondary" HorizontalAlignment="Stretch" 
+                  Command="{Binding ConfigureProviderCommand}" CommandParameter="alicloud" />
+        </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

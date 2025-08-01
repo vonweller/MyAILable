@@ -97,6 +97,7 @@
       <MenuItem Header="导出">
         <MenuItem Header="导出数据集..." Command="{Binding ExportProjectCommand}" />
       </MenuItem>
+      <MenuItem Header="AIChat" Command="{Binding OpenAIChatCommand}" />
       <MenuItem Header="帮助">
         <MenuItem Header="关于" />
       </MenuItem>
