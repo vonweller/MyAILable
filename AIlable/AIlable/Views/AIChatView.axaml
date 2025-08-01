@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:AIlable.ViewModels"
              xmlns:models="clr-namespace:AIlable.Models"
+             xmlns:controls="clr-namespace:AIlable.Controls"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
              x:Class="AIlable.Views.AIChatView"
              x:DataType="vm:AIChatViewModel"
@@ -109,39 +110,12 @@
     <!-- 主聊天区域 -->
     <Grid Grid.Column="0">
       <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <!-- 顶部工具栏 -->
-      <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="16,12">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-
-          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
-            <TextBlock Text="🤖 AI助手聊天" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Border Background="#4CAF50" CornerRadius="12" Padding="8,4" IsVisible="{Binding IsConfigured}">
-              <TextBlock Text="✓ 已连接" FontSize="12" Foreground="White" />
-            </Border>
-            <Border Background="#FF9800" CornerRadius="12" Padding="8,4" IsVisible="{Binding !IsConfigured}">
-              <TextBlock Text="⚠ 未配置" FontSize="12" Foreground="White" />
-            </Border>
-          </StackPanel>
-
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-            <Button Content="💾 保存" Command="{Binding SaveChatCommand}" Classes="secondary" Padding="8,6" />
-            <Button Content="🗑️ 清空" Command="{Binding ClearChatCommand}" Classes="secondary" Padding="8,6" />
-            <Button Content="⚙️" Command="{Binding ToggleConfigPanelCommand}" Classes="secondary" Padding="8,6" ToolTip.Tip="配置" />
-          </StackPanel>
-        </Grid>
-      </Border>
-
       <!-- 聊天消息区域 -->
-      <ScrollViewer Grid.Row="1" Name="ChatScrollViewer" VerticalScrollBarVisibility="Auto">
+      <ScrollViewer Grid.Row="0" Name="ChatScrollViewer" VerticalScrollBarVisibility="Auto">
         <ItemsControl ItemsSource="{Binding Messages}" Padding="16">
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="models:ChatMessage">
@@ -153,6 +127,16 @@
                     <!-- 图片预览 -->
                     <Image Source="{Binding ImageFilePath}" MaxHeight="200" MaxWidth="300" 
                            Margin="0,8,0,0" IsVisible="{Binding HasImage}" />
+                    <!-- 音频信息 -->
+                    <Border Background="#E3F2FD" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
+                            IsVisible="{Binding HasAudio}">
+                      <TextBlock Text="{Binding AudioFilePath, StringFormat='🎵 音频: {0}'}" FontSize="12" />
+                    </Border>
+                    <!-- 视频信息 -->
+                    <Border Background="#F3E5F5" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
+                            IsVisible="{Binding HasVideo}">
+                      <TextBlock Text="{Binding VideoFramePaths.Count, StringFormat='🎬 视频: {0}帧'}" FontSize="12" />
+                    </Border>
                     <!-- 文件信息 -->
                     <Border Background="#F0F0F0" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
                             IsVisible="{Binding HasFile}">
@@ -174,7 +158,18 @@
                         <TextBlock Text="输入中..." FontSize="10" Foreground="#4CAF50" Classes="streaming" />
                       </Border>
                     </StackPanel>
-                    <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
+                    <!-- 使用自定义的Markdown文本块 -->
+                    <controls:MarkdownTextBlock Text="{Binding Content}" />
+                    
+                    <!-- AI音频播放按钮 -->
+                    <Button Content="🔊 播放AI语音" 
+                            Command="{Binding $parent[UserControl].((vm:AIChatViewModel)DataContext).PlayAudioCommand}"
+                            CommandParameter="{Binding}"
+                            Classes="secondary"
+                            Margin="0,8,0,0"
+                            HorizontalAlignment="Left"
+                            IsVisible="{Binding HasAudioOutput}" />
+                    
                     <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm}'}" 
                                FontSize="10" Foreground="#666" HorizontalAlignment="Left" Margin="0,4,0,0" />
                   </StackPanel>
@@ -186,7 +181,7 @@
       </ScrollViewer>
 
       <!-- 输入区域 -->
-      <Border Grid.Row="2" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="16">
+      <Border Grid.Row="1" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="16">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -194,7 +189,17 @@
           </Grid.RowDefinitions>
 
           <!-- 状态栏 -->
-          <TextBlock Grid.Row="0" Text="{Binding StatusText}" FontSize="12" Foreground="#666" Margin="0,0,0,8" />
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#666" />
+            <!-- 录音状态显示 -->
+            <Border Background="#FF4444" CornerRadius="12" Padding="8,4" IsVisible="{Binding IsRecording}">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="🔴" FontSize="12" />
+                <TextBlock Text="录音中" FontSize="12" Foreground="White" />
+                <TextBlock Text="{Binding RecordingTime}" FontSize="12" Foreground="White" FontWeight="Medium" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
 
           <!-- 输入控件 -->
           <Grid Grid.Row="1">
@@ -208,18 +213,37 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="0,0,12,0" VerticalAlignment="Bottom">
               <Button Content="📷" Command="{Binding AttachImageCommand}" 
                       Classes="secondary" Padding="10,8" ToolTip.Tip="添加图片" />
+              <Button Content="🎵" Command="{Binding AttachAudioCommand}" 
+                      Classes="secondary" Padding="10,8" ToolTip.Tip="添加音频" />
+              <Button Content="🎬" Command="{Binding AttachVideoCommand}" 
+                      Classes="secondary" Padding="10,8" ToolTip.Tip="添加视频" />
               <Button Content="📎" Command="{Binding AttachFileCommand}" 
                       Classes="secondary" Padding="10,8" ToolTip.Tip="添加文件" />
+              
+              <!-- 录音按钮 -->
+              <Button Content="🎤" 
+                      Command="{Binding StartVoiceRecordingCommand}" 
+                      Classes="secondary" 
+                      Padding="10,8" 
+                      ToolTip.Tip="语音录制"
+                      IsVisible="{Binding !IsRecording}" />
+              <Button Content="⏹️" 
+                      Command="{Binding StopVoiceRecordingCommand}" 
+                      Classes="danger" 
+                      Padding="10,8" 
+                      ToolTip.Tip="停止录音"
+                      IsVisible="{Binding IsRecording}" />
             </StackPanel>
 
             <!-- 输入框 -->
             <TextBox Grid.Column="1" Classes="chat-input" 
                      Text="{Binding InputText}" 
-                     Watermark="输入消息... (Ctrl+Enter发送)"
+                     Watermark="输入消息... (Enter发送，Ctrl+Enter换行)"
                      AcceptsReturn="True"
                      MaxHeight="120">
               <TextBox.KeyBindings>
-                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendMessageCommand}" />
+                <KeyBinding Gesture="Enter" Command="{Binding SendMessageCommand}" />
+                <KeyBinding Gesture="Ctrl+Enter" Command="{x:Null}" />
               </TextBox.KeyBindings>
             </TextBox>
 
@@ -276,7 +300,19 @@
 
           <StackPanel Spacing="8">
             <TextBlock Text="模型" FontWeight="Medium" />
-            <TextBox Text="{Binding SelectedProvider.Model}" Watermark="模型名称" />
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <ComboBox Grid.Row="0" ItemsSource="{Binding SelectedProvider.AvailableModels}" 
+                        SelectedItem="{Binding SelectedProvider.Model}"
+                        HorizontalAlignment="Stretch" />
+              <TextBox Grid.Row="1" Text="{Binding SelectedProvider.Model}" 
+                       Watermark="或手动输入模型名称" 
+                       Margin="0,4,0,0"
+                       FontSize="12" />
+            </Grid>
           </StackPanel>
 
           <StackPanel Spacing="8">
@@ -289,6 +325,18 @@
             <TextBlock Text="{Binding SelectedProvider.MaxTokens, StringFormat='最大令牌: {0}'}" FontWeight="Medium" />
             <Slider Value="{Binding SelectedProvider.MaxTokens}" Minimum="100" Maximum="8000" 
                     TickFrequency="100" IsSnapToTickEnabled="True" />
+          </StackPanel>
+
+          <!-- AI语音选择（仅全模态模型显示） -->
+          <StackPanel Spacing="8" IsVisible="{Binding SelectedProvider.AvailableVoices.Count}">
+            <TextBlock Text="AI语音" FontWeight="Medium" />
+            <ComboBox ItemsSource="{Binding SelectedProvider.AvailableVoices}" 
+                      SelectedItem="{Binding SelectedProvider.AiVoice}"
+                      HorizontalAlignment="Stretch" />
+            <TextBlock Text="• Cherry: 温柔女声" FontSize="10" Foreground="#666" />
+            <TextBlock Text="• Serena: 优雅女声" FontSize="10" Foreground="#666" />
+            <TextBlock Text="• Ethan: 磁性男声" FontSize="10" Foreground="#666" />
+            <TextBlock Text="• Chelsie: 活泼女声" FontSize="10" Foreground="#666" />
           </StackPanel>
 
           <Button Content="🔧 应用配置" Command="{Binding ConfigureProviderCommand}" 

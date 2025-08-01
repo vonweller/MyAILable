@@ -33,6 +33,10 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty] private string _currentLabel;
     [ObservableProperty] private int _currentLabelIndex;
     [ObservableProperty] private int _currentImageIndex;
+    
+    // 视图模式控制
+    [ObservableProperty] private bool _isAIChatViewActive = false;
+    [ObservableProperty] private AIChatViewModel? _aiChatViewModel;
 
     // AI模型状态相关属性
     public string AIModelStatus => _aiModelManager.HasActiveModel ? "✅ 已加载" : "❌ 未加载";
@@ -145,6 +149,7 @@ public partial class MainViewModel : ViewModelBase
         
         // AI聊天命令
         OpenAIChatCommand = new AsyncRelayCommand(OpenAIChatAsync);
+        BackToAnnotationCommand = new RelayCommand(BackToAnnotation);
 
         // Subscribe to tool manager events
         _toolManager.ActiveToolChanged += OnActiveToolChangedInternal;
@@ -199,6 +204,7 @@ public partial class MainViewModel : ViewModelBase
     
     // AI聊天命令
     public ICommand OpenAIChatCommand { get; }
+    public ICommand BackToAnnotationCommand { get; }
     
     // 图像导航命令
     public ICommand NextImageCommand { get; }
@@ -2222,28 +2228,36 @@ public partial class MainViewModel : ViewModelBase
     {
         try
         {
-            // 创建AI聊天窗口
-            var chatWindow = new Views.AIChatWindow(_fileDialogService!);
+            Console.WriteLine("[DEBUG MAIN] Switching to AI Chat view");
             
-            // 获取父窗口
-            var parentWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-                ? desktop.MainWindow
-                : null;
-
-            if (parentWindow != null)
+            // 创建或获取AI聊天ViewModel
+            if (AiChatViewModel == null)
             {
-                // 设置窗口所有者，使其显示在主窗口前面
-                await chatWindow.ShowDialog(parentWindow);
+                AiChatViewModel = new AIChatViewModel(new AIChatService(), _fileDialogService);
+                Console.WriteLine("[DEBUG MAIN] Created new AIChatViewModel");
             }
-            else
-            {
-                chatWindow.Show();
-            }
+            
+            // 切换到AI聊天视图
+            IsAIChatViewActive = true;
+            StatusText = "AI聊天模式 - 点击'返回标注'返回项目视图";
+            
+            Console.WriteLine("[DEBUG MAIN] Switched to AI Chat view successfully");
         }
         catch (Exception ex)
         {
-            StatusText = $"打开AI聊天失败: {ex.Message}";
+            StatusText = $"切换AI聊天失败: {ex.Message}";
+            Console.WriteLine($"[ERROR MAIN] Failed to switch to AI Chat: {ex.Message}");
         }
+        
+        await Task.CompletedTask; // 消除async warning
+    }
+    
+    private void BackToAnnotation()
+    {
+        Console.WriteLine("[DEBUG MAIN] Switching back to annotation view");
+        IsAIChatViewActive = false;
+        StatusText = HasProject ? "项目已打开 - 开始标注" : "欢迎使用AIlable - 创建或打开项目开始标注";
+        Console.WriteLine("[DEBUG MAIN] Returned to annotation view successfully");
     }
 
     #endregion
