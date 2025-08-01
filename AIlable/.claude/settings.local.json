@@ -14,7 +14,8 @@
       "Bash(csc:*)",
       "Bash(test_audio_format.exe)",
       "Bash(dotnet clean:*)",
-      "Bash(dotnet-script:*)"
+      "Bash(dotnet-script:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }

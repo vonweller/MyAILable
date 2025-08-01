@@ -763,8 +763,10 @@ public partial class MainViewModel : ViewModelBase
             {
                 foreach (var annotation in image.Annotations)
                 {
+                    // 从标注标签中提取纯净的标签名称（去除置信度分数）
+                    var cleanLabel = ExportService.ExtractCleanLabel(annotation.Label);
                     var center = annotation.GetCenter();
-                    lines.Add($"{image.FileName},{annotation.Type},{annotation.Label},{center.X},{center.Y}");
+                    lines.Add($"{image.FileName},{annotation.Type},{cleanLabel},{center.X},{center.Y}");
                 }
             }
             
@@ -971,6 +973,10 @@ public partial class MainViewModel : ViewModelBase
                 CurrentLabelIndex = 0;
                 UpdateToolsWithCurrentLabel();
             }
+            
+            // 更新AI模型管理器的项目标签
+            _aiModelManager.SetProjectLabels(value.Labels.ToList());
+            Console.WriteLine($"已更新AI模型项目标签: {string.Join(", ", value.Labels)}");
 
             // 更新窗口标题
             Title = $"AIlable - {value.Name}";
@@ -1009,6 +1015,10 @@ public partial class MainViewModel : ViewModelBase
             Annotations.Clear();
             CurrentImageIndex = 0;
             Title = "AIlable - Image Annotation Tool";
+            
+            // 清空AI模型标签
+            _aiModelManager.SetProjectLabels(new List<string>());
+            Console.WriteLine("已清空AI模型项目标签");
         }
     }
 
@@ -1451,6 +1461,9 @@ public partial class MainViewModel : ViewModelBase
                 NotificationToast.ShowSuccess($"已删除标签: {labelToDelete}");
             }
 
+            // 更新AI模型标签
+            _aiModelManager.SetProjectLabels(CurrentProject.Labels.ToList());
+            
             // 刷新当前图像的标注显示
             RefreshCurrentImageAnnotations();
 
@@ -1660,6 +1673,9 @@ public partial class MainViewModel : ViewModelBase
                     CurrentLabel = result;
                     CurrentLabelIndex = AvailableLabels.Count - 1;
                     UpdateToolsWithCurrentLabel();
+                    
+                    // 更新AI模型标签
+                    _aiModelManager.SetProjectLabels(CurrentProject.Labels.ToList());
 
                     StatusText = $"已添加新标签: {result}";
                     NotificationToast.ShowSuccess($"已添加新标签: {result}");

@@ -236,14 +236,17 @@ public static class ExportService
                 // Process annotations for this image
                 foreach (var annotation in image.Annotations)
                 {
+                    // 从标注标签中提取纯净的标签名称（去除置信度分数）
+                    var cleanLabel = ExtractCleanLabel(annotation.Label);
+                    
                     // Get or create category
-                    if (!categoryIdMap.ContainsKey(annotation.Label))
+                    if (!categoryIdMap.ContainsKey(cleanLabel))
                     {
-                        categoryIdMap[annotation.Label] = categoryIdCounter++;
+                        categoryIdMap[cleanLabel] = categoryIdCounter++;
                         cocoDataset.Categories.Add(new CocoCategory
                         {
-                            Id = categoryIdMap[annotation.Label],
-                            Name = annotation.Label,
+                            Id = categoryIdMap[cleanLabel],
+                            Name = cleanLabel,
                             SuperCategory = "object"
                         });
                     }
@@ -252,7 +255,7 @@ public static class ExportService
                     {
                         Id = annotationIdCounter++,
                         ImageId = imageIdCounter,
-                        CategoryId = categoryIdMap[annotation.Label],
+                        CategoryId = categoryIdMap[cleanLabel],
                         Area = annotation.GetArea(),
                         IsCrowd = 0
                     };
@@ -315,6 +318,72 @@ public static class ExportService
                                 circle.Radius * 2
                             };
                             break;
+
+                        case OrientedBoundingBoxAnnotation obb:
+                            // Convert OBB to polygon segmentation using corner points
+                            var obbSegmentation = new List<double>();
+                            var obbPoints = obb.GetPoints();
+                            foreach (var point in obbPoints)
+                            {
+                                obbSegmentation.Add(point.X);
+                                obbSegmentation.Add(point.Y);
+                            }
+                            cocoAnnotation.Segmentation.Add(obbSegmentation);
+                            
+                            // Calculate axis-aligned bounding box from OBB points
+                            var obbMinX = obbPoints.Min(p => p.X);
+                            var obbMinY = obbPoints.Min(p => p.Y);
+                            var obbMaxX = obbPoints.Max(p => p.X);
+                            var obbMaxY = obbPoints.Max(p => p.Y);
+                            cocoAnnotation.Bbox = new List<double> { obbMinX, obbMinY, obbMaxX - obbMinX, obbMaxY - obbMinY };
+                            break;
+
+                        case LineAnnotation line:
+                            // Convert line to minimal polygon
+                            var lineSegmentation = new List<double>
+                            {
+                                line.StartPoint.X, line.StartPoint.Y,
+                                line.EndPoint.X, line.EndPoint.Y,
+                                line.EndPoint.X + 1, line.EndPoint.Y + 1,
+                                line.StartPoint.X + 1, line.StartPoint.Y + 1
+                            };
+                            cocoAnnotation.Segmentation.Add(lineSegmentation);
+                            
+                            // Calculate bounding box
+                            var lineMinX = Math.Min(line.StartPoint.X, line.EndPoint.X);
+                            var lineMinY = Math.Min(line.StartPoint.Y, line.EndPoint.Y);
+                            var lineMaxX = Math.Max(line.StartPoint.X, line.EndPoint.X);
+                            var lineMaxY = Math.Max(line.StartPoint.Y, line.EndPoint.Y);
+                            
+                            // Ensure minimum bounding box size
+                            if (lineMaxX - lineMinX < 1.0) lineMaxX = lineMinX + 1.0;
+                            if (lineMaxY - lineMinY < 1.0) lineMaxY = lineMinY + 1.0;
+                            
+                            cocoAnnotation.Bbox = new List<double> { lineMinX, lineMinY, lineMaxX - lineMinX, lineMaxY - lineMinY };
+                            break;
+
+                        case PointAnnotation point:
+                            // Convert point to small circle approximation
+                            var pointSegmentation = new List<double>();
+                            var pointRadius = point.Size / 2.0;
+                            const int pointSegments = 8;
+                            for (int i = 0; i < pointSegments; i++)
+                            {
+                                var angle = 2 * Math.PI * i / pointSegments;
+                                var x = point.Position.X + pointRadius * Math.Cos(angle);
+                                var y = point.Position.Y + pointRadius * Math.Sin(angle);
+                                pointSegmentation.Add(x);
+                                pointSegmentation.Add(y);
+                            }
+                            cocoAnnotation.Segmentation.Add(pointSegmentation);
+                            cocoAnnotation.Bbox = new List<double>
+                            {
+                                point.Position.X - pointRadius,
+                                point.Position.Y - pointRadius,
+                                pointRadius * 2,
+                                pointRadius * 2
+                            };
+                            break;
                     }
 
                     cocoDataset.Annotations.Add(cocoAnnotation);
@@ -367,7 +436,7 @@ public static class ExportService
         }
     }
 
-    public static async Task<bool> ExportToYoloAsync(AnnotationProject project, string outputDirectory, bool useSegmentationFormat = true)
+    public static async Task<bool> ExportToYoloAsync(AnnotationProject project, string outputDirectory, bool useSegmentationFormat = true, float trainRatio = 0.8f)
     {
         try
         {
@@ -394,111 +463,41 @@ public static class ExportService
             Directory.CreateDirectory(labelsTrainDir);
             Directory.CreateDirectory(labelsValDir);
 
-            // Create classes.txt
-            var classNames = project.GetUsedLabels().OrderBy(x => x).ToList();
+            // Create classes.txt - 使用项目定义的标签，而不是从标注中提取的标签（可能包含置信度分数）
+            var classNames = project.Labels.Where(label => !string.IsNullOrWhiteSpace(label)).OrderBy(x => x).ToList();
             var classesPath = Path.Combine(outputDirectory, "classes.txt");
             await File.WriteAllLinesAsync(classesPath, classNames);
 
             // Create YAML configuration file
             await CreateYoloYamlAsync(outputDirectory, classNames, useSegmentationFormat);
 
-            // Process each image (only images with annotations)
-            foreach (var image in project.Images)
+            // 过滤有标注的图像
+            var imagesWithAnnotations = project.Images.Where(img => img.Annotations != null && img.Annotations.Any()).ToList();
+            
+            if (!imagesWithAnnotations.Any())
             {
-                // Skip images without annotations
-                if (image.Annotations == null || !image.Annotations.Any())
-                {
-                    continue;
-                }
-
-                // For now, put all images in train directory (can be enhanced later with train/val split)
-                var labelFileName = Path.ChangeExtension(image.FileName, ".txt");
-                var labelPath = Path.Combine(labelsTrainDir, labelFileName);
-                var labelLines = new List<string>();
-
-                foreach (var annotation in image.Annotations)
-                {
-                    var classIndex = classNames.IndexOf(annotation.Label);
-                    if (classIndex < 0) continue;
-
-                    switch (annotation)
-                    {
-                        case RectangleAnnotation rect:
-                            // Convert to YOLO format (normalized coordinates)
-                            var centerX = (rect.TopLeft.X + rect.BottomRight.X) / 2.0 / image.Width;
-                            var centerY = (rect.TopLeft.Y + rect.BottomRight.Y) / 2.0 / image.Height;
-                            var width = Math.Abs(rect.BottomRight.X - rect.TopLeft.X) / image.Width;
-                            var height = Math.Abs(rect.BottomRight.Y - rect.TopLeft.Y) / image.Height;
-
-                            labelLines.Add($"{classIndex} {centerX:F6} {centerY:F6} {width:F6} {height:F6}");
-                            break;
-
-                        case PolygonAnnotation polygon:
-                            if (useSegmentationFormat && polygon.Vertices.Count >= 3)
-                            {
-                                // YOLO segmentation format: class_id x1 y1 x2 y2 x3 y3 ... xn yn
-                                // All coordinates are normalized (0-1)
-                                var polygonLine = $"{classIndex}";
-                                foreach (var vertex in polygon.Vertices)
-                                {
-                                    var normalizedX = vertex.X / image.Width;
-                                    var normalizedY = vertex.Y / image.Height;
-
-                                    // Clamp values to [0, 1] range
-                                    normalizedX = Math.Max(0, Math.Min(1, normalizedX));
-                                    normalizedY = Math.Max(0, Math.Min(1, normalizedY));
-
-                                    polygonLine += $" {normalizedX:F6} {normalizedY:F6}";
-                                }
-                                labelLines.Add(polygonLine);
-                            }
-                            else
-                            {
-                                // Fallback to bounding box format for compatibility
-                                var minX = polygon.Vertices.Min(v => v.X);
-                                var minY = polygon.Vertices.Min(v => v.Y);
-                                var maxX = polygon.Vertices.Max(v => v.X);
-                                var maxY = polygon.Vertices.Max(v => v.Y);
-
-                                var polyCenterX = (minX + maxX) / 2.0 / image.Width;
-                                var polyCenterY = (minY + maxY) / 2.0 / image.Height;
-                                var polyWidth = (maxX - minX) / image.Width;
-                                var polyHeight = (maxY - minY) / image.Height;
-
-                                labelLines.Add($"{classIndex} {polyCenterX:F6} {polyCenterY:F6} {polyWidth:F6} {polyHeight:F6}");
-                            }
-                            break;
-
-                        case CircleAnnotation circle:
-                            // Convert circle to bounding box
-                            var circleMinX = circle.Center.X - circle.Radius;
-                            var circleMinY = circle.Center.Y - circle.Radius;
-                            var circleMaxX = circle.Center.X + circle.Radius;
-                            var circleMaxY = circle.Center.Y + circle.Radius;
-
-                            var circleCenterX = circle.Center.X / image.Width;
-                            var circleCenterY = circle.Center.Y / image.Height;
-                            var circleWidth = (circle.Radius * 2) / image.Width;
-                            var circleHeight = (circle.Radius * 2) / image.Height;
-
-                            labelLines.Add($"{classIndex} {circleCenterX:F6} {circleCenterY:F6} {circleWidth:F6} {circleHeight:F6}");
-                            break;
-                    }
-                }
-
-                await File.WriteAllLinesAsync(labelPath, labelLines);
-
-                // Copy image to images/train directory
-                var imagePath = Path.Combine(imagesTrainDir, image.FileName);
-                if (File.Exists(image.FilePath))
-                {
-                    File.Copy(image.FilePath, imagePath, true);
-                }
-                else
-                {
-                    Console.WriteLine($"Warning: Source image not found: {image.FilePath}");
-                }
+                Console.WriteLine("No images with annotations found");
+                return false;
             }
+
+            // 随机打乱图像顺序以确保train/val分割的随机性
+            var random = new Random(42); // 使用固定种子确保结果可重复
+            var shuffledImages = imagesWithAnnotations.OrderBy(x => random.Next()).ToList();
+            
+            // 按比例分割train/val
+            var trainCount = (int)(shuffledImages.Count * trainRatio);
+            var trainImages = shuffledImages.Take(trainCount).ToList();
+            var valImages = shuffledImages.Skip(trainCount).ToList();
+            
+            Console.WriteLine($"数据集分割: 总共 {shuffledImages.Count} 张图像");
+            Console.WriteLine($"训练集: {trainImages.Count} 张图像 ({trainRatio*100:F1}%)");
+            Console.WriteLine($"验证集: {valImages.Count} 张图像 ({(1-trainRatio)*100:F1}%)");
+
+            // 处理训练集
+            await ProcessImageSet(trainImages, imagesTrainDir, labelsTrainDir, classNames, useSegmentationFormat, "train");
+            
+            // 处理验证集
+            await ProcessImageSet(valImages, imagesValDir, labelsValDir, classNames, useSegmentationFormat, "val");
 
             return true;
         }
@@ -508,6 +507,173 @@ public static class ExportService
             Console.WriteLine($"Stack trace: {ex.StackTrace}");
             return false;
         }
+    }
+    
+    /// <summary>
+    /// 处理图像集合（训练集或验证集）
+    /// </summary>
+    private static async Task ProcessImageSet(List<AnnotationImage> images, string imagesDir, string labelsDir, 
+        List<string> classNames, bool useSegmentationFormat, string setName)
+    {
+        foreach (var image in images)
+        {
+            var labelFileName = Path.ChangeExtension(image.FileName, ".txt");
+            var labelPath = Path.Combine(labelsDir, labelFileName);
+            var labelLines = new List<string>();
+
+            foreach (var annotation in image.Annotations)
+            {
+                // 从标注标签中提取纯净的标签名称（去除置信度分数）
+                var cleanLabel = ExtractCleanLabel(annotation.Label);
+                var classIndex = classNames.IndexOf(cleanLabel);
+                if (classIndex < 0) 
+                {
+                    Console.WriteLine($"Warning: Label '{annotation.Label}' (clean: '{cleanLabel}') not found in class names. Skipping annotation.");
+                    continue;
+                }
+
+                switch (annotation)
+                {
+                    case RectangleAnnotation rect:
+                        // Convert to YOLO format (normalized coordinates)
+                        var centerX = (rect.TopLeft.X + rect.BottomRight.X) / 2.0 / image.Width;
+                        var centerY = (rect.TopLeft.Y + rect.BottomRight.Y) / 2.0 / image.Height;
+                        var width = Math.Abs(rect.BottomRight.X - rect.TopLeft.X) / image.Width;
+                        var height = Math.Abs(rect.BottomRight.Y - rect.TopLeft.Y) / image.Height;
+
+                        labelLines.Add($"{classIndex} {centerX:F6} {centerY:F6} {width:F6} {height:F6}");
+                        break;
+
+                    case PolygonAnnotation polygon:
+                        if (useSegmentationFormat && polygon.Vertices.Count >= 3)
+                        {
+                            // YOLO segmentation format: class_id x1 y1 x2 y2 x3 y3 ... xn yn
+                            // All coordinates are normalized (0-1)
+                            var polygonLine = $"{classIndex}";
+                            foreach (var vertex in polygon.Vertices)
+                            {
+                                var normalizedX = vertex.X / image.Width;
+                                var normalizedY = vertex.Y / image.Height;
+
+                                // Clamp values to [0, 1] range
+                                normalizedX = Math.Max(0, Math.Min(1, normalizedX));
+                                normalizedY = Math.Max(0, Math.Min(1, normalizedY));
+
+                                polygonLine += $" {normalizedX:F6} {normalizedY:F6}";
+                            }
+                            labelLines.Add(polygonLine);
+                        }
+                        else
+                        {
+                            // Fallback to bounding box format for compatibility
+                            var minX = polygon.Vertices.Min(v => v.X);
+                            var minY = polygon.Vertices.Min(v => v.Y);
+                            var maxX = polygon.Vertices.Max(v => v.X);
+                            var maxY = polygon.Vertices.Max(v => v.Y);
+
+                            var polyCenterX = (minX + maxX) / 2.0 / image.Width;
+                            var polyCenterY = (minY + maxY) / 2.0 / image.Height;
+                            var polyWidth = (maxX - minX) / image.Width;
+                            var polyHeight = (maxY - minY) / image.Height;
+
+                            labelLines.Add($"{classIndex} {polyCenterX:F6} {polyCenterY:F6} {polyWidth:F6} {polyHeight:F6}");
+                        }
+                        break;
+
+                    case CircleAnnotation circle:
+                        // Convert circle to bounding box
+                        var circleMinX = circle.Center.X - circle.Radius;
+                        var circleMinY = circle.Center.Y - circle.Radius;
+                        var circleMaxX = circle.Center.X + circle.Radius;
+                        var circleMaxY = circle.Center.Y + circle.Radius;
+
+                        var circleCenterX = circle.Center.X / image.Width;
+                        var circleCenterY = circle.Center.Y / image.Height;
+                        var circleWidth = (circle.Radius * 2) / image.Width;
+                        var circleHeight = (circle.Radius * 2) / image.Height;
+
+                        labelLines.Add($"{classIndex} {circleCenterX:F6} {circleCenterY:F6} {circleWidth:F6} {circleHeight:F6}");
+                        break;
+
+                    case OrientedBoundingBoxAnnotation obb:
+                        // 使用YOLO OBB格式: class_id center_x center_y width height angle
+                        var obbCenterX = obb.CenterX / image.Width;
+                        var obbCenterY = obb.CenterY / image.Height;
+                        var obbWidth = obb.Width / image.Width;
+                        var obbHeight = obb.Height / image.Height;
+                        var obbAngle = obb.Angle / 180.0; // 归一化角度到0-2范围
+
+                        labelLines.Add($"{classIndex} {obbCenterX:F6} {obbCenterY:F6} {obbWidth:F6} {obbHeight:F6} {obbAngle:F6}");
+                        break;
+
+                    case LineAnnotation line:
+                        // Convert line to bounding box (for YOLO compatibility)
+                        var lineMinX = Math.Min(line.StartPoint.X, line.EndPoint.X);
+                        var lineMinY = Math.Min(line.StartPoint.Y, line.EndPoint.Y);
+                        var lineMaxX = Math.Max(line.StartPoint.X, line.EndPoint.X);
+                        var lineMaxY = Math.Max(line.StartPoint.Y, line.EndPoint.Y);
+                        
+                        // Ensure minimum bounding box size for very thin lines
+                        if (lineMaxX - lineMinX < 1.0) lineMaxX = lineMinX + 1.0;
+                        if (lineMaxY - lineMinY < 1.0) lineMaxY = lineMinY + 1.0;
+
+                        var lineCenterX = (lineMinX + lineMaxX) / 2.0 / image.Width;
+                        var lineCenterY = (lineMinY + lineMaxY) / 2.0 / image.Height;
+                        var lineWidth = (lineMaxX - lineMinX) / image.Width;
+                        var lineHeight = (lineMaxY - lineMinY) / image.Height;
+
+                        labelLines.Add($"{classIndex} {lineCenterX:F6} {lineCenterY:F6} {lineWidth:F6} {lineHeight:F6}");
+                        break;
+
+                    case PointAnnotation point:
+                        // Convert point to small bounding box (for YOLO compatibility) 
+                        var pointSize = point.Size / 2.0; // radius
+                        var pointCenterX = point.Position.X / image.Width;
+                        var pointCenterY = point.Position.Y / image.Height;
+                        var pointWidth = (pointSize * 2) / image.Width;
+                        var pointHeight = (pointSize * 2) / image.Height;
+
+                        labelLines.Add($"{classIndex} {pointCenterX:F6} {pointCenterY:F6} {pointWidth:F6} {pointHeight:F6}");
+                        break;
+                }
+            }
+
+            await File.WriteAllLinesAsync(labelPath, labelLines);
+
+            // Copy image to appropriate directory
+            var imagePath = Path.Combine(imagesDir, image.FileName);
+            if (File.Exists(image.FilePath))
+            {
+                File.Copy(image.FilePath, imagePath, true);
+            }
+            else
+            {
+                Console.WriteLine($"Warning: Source image not found: {image.FilePath}");
+            }
+        }
+        
+        Console.WriteLine($"已处理 {setName} 集: {images.Count} 张图像");
+    }
+
+    /// <summary>
+    /// 从包含置信度分数的标签中提取纯净的标签名称
+    /// 例如: "lz (0.51)" -> "lz", "putong (0.82)" -> "putong"
+    /// </summary>
+    public static string ExtractCleanLabel(string labelWithConfidence)
+    {
+        if (string.IsNullOrWhiteSpace(labelWithConfidence))
+            return string.Empty;
+            
+        // 查找括号的位置
+        var parenIndex = labelWithConfidence.IndexOf('(');
+        if (parenIndex > 0)
+        {
+            // 提取括号前的部分并去除空格
+            return labelWithConfidence.Substring(0, parenIndex).Trim();
+        }
+        
+        // 如果没有括号，返回原标签（去除前后空格）
+        return labelWithConfidence.Trim();
     }
 
     public static async Task<bool> ExportToVocAsync(AnnotationProject project, string outputDirectory)
@@ -559,6 +725,8 @@ public static class ExportService
 
                 foreach (var annotation in image.Annotations)
                 {
+                    // 从标注标签中提取纯净的标签名称（去除置信度分数）
+                    var cleanLabel = ExtractCleanLabel(annotation.Label);
                     VocObject vocObject = null;
 
                     switch (annotation)
@@ -566,7 +734,7 @@ public static class ExportService
                         case RectangleAnnotation rect:
                             vocObject = new VocObject
                             {
-                                Name = annotation.Label,
+                                Name = cleanLabel,
                                 Pose = "Unspecified",
                                 Truncated = 0,
                                 Difficult = 0,
@@ -589,7 +757,7 @@ public static class ExportService
 
                             vocObject = new VocObject
                             {
-                                Name = annotation.Label,
+                                Name = cleanLabel,
                                 Pose = "Unspecified",
                                 Truncated = 0,
                                 Difficult = 0,
@@ -607,7 +775,7 @@ public static class ExportService
                             // Convert circle to bounding box
                             vocObject = new VocObject
                             {
-                                Name = annotation.Label,
+                                Name = cleanLabel,
                                 Pose = "Unspecified",
                                 Truncated = 0,
                                 Difficult = 0,
@@ -617,6 +785,76 @@ public static class ExportService
                                     Ymin = (int)(circle.Center.Y - circle.Radius),
                                     Xmax = (int)(circle.Center.X + circle.Radius),
                                     Ymax = (int)(circle.Center.Y + circle.Radius)
+                                }
+                            };
+                            break;
+
+                        case OrientedBoundingBoxAnnotation obb:
+                            // Convert OBB to axis-aligned bounding box for VOC format
+                            var obbPoints = obb.GetPoints();
+                            var obbMinX = obbPoints.Min(p => p.X);
+                            var obbMinY = obbPoints.Min(p => p.Y);
+                            var obbMaxX = obbPoints.Max(p => p.X);
+                            var obbMaxY = obbPoints.Max(p => p.Y);
+
+                            vocObject = new VocObject
+                            {
+                                Name = cleanLabel,
+                                Pose = "Unspecified",
+                                Truncated = 0,
+                                Difficult = 0,
+                                BndBox = new VocBndBox
+                                {
+                                    Xmin = (int)obbMinX,
+                                    Ymin = (int)obbMinY,
+                                    Xmax = (int)obbMaxX,
+                                    Ymax = (int)obbMaxY
+                                }
+                            };
+                            break;
+
+                        case LineAnnotation line:
+                            // Convert line to bounding box for VOC format
+                            var lineMinX = Math.Min(line.StartPoint.X, line.EndPoint.X);
+                            var lineMinY = Math.Min(line.StartPoint.Y, line.EndPoint.Y);
+                            var lineMaxX = Math.Max(line.StartPoint.X, line.EndPoint.X);
+                            var lineMaxY = Math.Max(line.StartPoint.Y, line.EndPoint.Y);
+                            
+                            // Ensure minimum bounding box size
+                            if (lineMaxX - lineMinX < 1.0) lineMaxX = lineMinX + 1.0;
+                            if (lineMaxY - lineMinY < 1.0) lineMaxY = lineMinY + 1.0;
+
+                            vocObject = new VocObject
+                            {
+                                Name = cleanLabel,
+                                Pose = "Unspecified",
+                                Truncated = 0,
+                                Difficult = 0,
+                                BndBox = new VocBndBox
+                                {
+                                    Xmin = (int)lineMinX,
+                                    Ymin = (int)lineMinY,
+                                    Xmax = (int)lineMaxX,
+                                    Ymax = (int)lineMaxY
+                                }
+                            };
+                            break;
+
+                        case PointAnnotation point:
+                            // Convert point to small bounding box for VOC format
+                            var pointRadius = point.Size / 2.0;
+                            vocObject = new VocObject
+                            {
+                                Name = cleanLabel,
+                                Pose = "Unspecified",
+                                Truncated = 0,
+                                Difficult = 0,
+                                BndBox = new VocBndBox
+                                {
+                                    Xmin = (int)(point.Position.X - pointRadius),
+                                    Ymin = (int)(point.Position.Y - pointRadius),
+                                    Xmax = (int)(point.Position.X + pointRadius),
+                                    Ymax = (int)(point.Position.Y + pointRadius)
                                 }
                             };
                             break;

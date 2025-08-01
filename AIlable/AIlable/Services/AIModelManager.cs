@@ -12,6 +12,7 @@ public class AIModelManager
 {
     private readonly Dictionary<AIModelType, IAIModelService> _modelServices;
     private IAIModelService? _activeModel;
+    private List<string> _projectLabels = new();
     
     public AIModelManager()
     {
@@ -21,6 +22,26 @@ public class AIModelManager
             { AIModelType.SegmentAnything, new SegmentationModelService() },
             { AIModelType.Custom, new OBBModelService() } // OBB模型使用Custom类型
         };
+    }
+    
+    /// <summary>
+    /// 设置项目标签
+    /// </summary>
+    /// <param name="projectLabels">项目标签列表</param>
+    public void SetProjectLabels(List<string> projectLabels)
+    {
+        _projectLabels = projectLabels ?? new List<string>();
+        
+        // 更新所有YOLO模型服务的标签
+        foreach (var service in _modelServices.Values)
+        {
+            if (service is YoloModelService yoloService)
+            {
+                yoloService.UpdateProjectLabels(_projectLabels);
+            }
+        }
+        
+        Console.WriteLine($"已更新项目标签: {string.Join(", ", _projectLabels)}");
     }
     
     /// <summary>
@@ -50,6 +71,14 @@ public class AIModelManager
             if (_activeModel != null)
             {
                 _activeModel.UnloadModel();
+            }
+            
+            // 如果是YOLO模型，创建新实例并传递项目标签
+            if (modelType == AIModelType.YOLO)
+            {
+                var yoloService = new YoloModelService(_projectLabels);
+                _modelServices[AIModelType.YOLO] = yoloService;
+                modelService = yoloService;
             }
             
             // 加载新模型
