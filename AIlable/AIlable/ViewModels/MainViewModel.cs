@@ -18,7 +18,7 @@ namespace AIlable.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
-    [ObservableProperty] private string _title = "AIlable - Image Annotation Tool";
+    [ObservableProperty] private string _title = "AIlable - Image Annotation Tool 作者：Vonweller QQ529538187";
     [ObservableProperty] private AnnotationProject? _currentProject;
     [ObservableProperty] private AnnotationImage? _currentImage;
     [ObservableProperty] private Bitmap? _currentImageBitmap;
@@ -950,7 +950,7 @@ public partial class MainViewModel : ViewModelBase
         }
         else
         {
-            Title = "AIlable - Image Annotation Tool";
+            Title = "AIlable - Image Annotation Tool 作者：Vonweller QQ529538187";
         }
     }
 
@@ -1018,7 +1018,7 @@ public partial class MainViewModel : ViewModelBase
             HasImage = false;
             Annotations.Clear();
             CurrentImageIndex = 0;
-            Title = "AIlable - Image Annotation Tool";
+            Title = "AIlable - Image Annotation Tool 作者：Vonweller QQ529538187";
             
             // 清空AI模型标签
             _aiModelManager.SetProjectLabels(new List<string>());
