@@ -78,6 +78,12 @@ public class ImageCanvas : Control
     private bool _isRotatingOBB = false;
     private OrientedBoundingBoxAnnotation? _rotatingOBB = null;
     private OrientedBoundingBoxTool? _obbTool = null;
+    
+    // 关键点拖拽状态
+    private bool _isDraggingKeypoint = false;
+    private KeypointAnnotation? _draggingKeypointAnnotation = null;
+    private Keypoint? _draggingKeypoint = null;
+    private KeypointTool? _keypointTool = null;
 
     public Bitmap? Image
     {
@@ -127,9 +133,11 @@ public class ImageCanvas : Control
     public event EventHandler<Point2D>? PointerClickedOnImage;
     public event EventHandler<Point2D>? PointerMovedOnImage;
     public event EventHandler<Annotation>? AnnotationSelected;
+    public event EventHandler<Annotation>? AnnotationCompleted;
     
     // 新增：获取工具管理器的事件
     public event Func<OrientedBoundingBoxTool?>? GetOBBToolRequested;
+    public event Func<KeypointTool?>? GetKeypointToolRequested;
 
     static ImageCanvas()
     {
@@ -277,6 +285,16 @@ public class ImageCanvas : Control
                     return new Point(center.X - 20, topY - 18);
                 }
                 return new Point(center.X - 20, center.Y - 18);
+            case KeypointAnnotation keypoint:
+                // 关键点标注标签显示在边界框上方
+                if (keypoint.HasBoundingBox)
+                {
+                    var boundingTopLeft = ImageToScreen(new Point2D(
+                        Math.Min(keypoint.BoundingBoxStart.X, keypoint.BoundingBoxEnd.X),
+                        Math.Min(keypoint.BoundingBoxStart.Y, keypoint.BoundingBoxEnd.Y)), imageRect);
+                    return new Point(boundingTopLeft.X, boundingTopLeft.Y - 18);
+                }
+                return new Point(center.X - 20, center.Y - 18); // 如果没有边界框，使用默认位置
             default:
                 return new Point(center.X - 20, center.Y - 18); // 默认位置
         }
@@ -481,19 +499,57 @@ public class ImageCanvas : Control
 
     private void DrawKeypoints(DrawingContext context, KeypointAnnotation keypoint, Rect imageRect, Pen pen, IBrush? brush, bool isDrawing = false)
     {
-        // 绘制骨骼连接线（如果启用）
+        // 获取关键点工具以检查当前状态
+        var keypointTool = GetKeypointToolRequested?.Invoke();
+        
+        // 首先绘制边界框（如果有的话）
+        if (keypoint.HasBoundingBox)
+        {
+            DrawBoundingBoxForKeypoints(context, keypoint.BoundingBoxStart, keypoint.BoundingBoxEnd, imageRect, pen, isDrawing);
+        }
+        
+        // 检查是否是当前正在编辑的关键点标注
+        bool isCurrentAnnotation = keypointTool != null && 
+            (isDrawing || (keypointTool.GetCurrentState() == KeypointTool.KeypointAnnotationState.PlacingKeypoints));
+        
+        if (keypointTool != null && isCurrentAnnotation)
+        {
+            var currentState = keypointTool.GetCurrentState();
+            
+            // 如果正在绘制边界框，显示边界框预览
+            if (currentState == KeypointTool.KeypointAnnotationState.DrawingBoundingBox)
+            {
+                var (start, end) = keypointTool.GetCurrentBoundingBox();
+                DrawBoundingBoxPreview(context, start, end, imageRect, pen);
+                return; // 在边界框阶段不绘制关键点
+            }
+            
+            // 如果正在标记关键点，显示边界框预览和提示（无论isDrawing状态）
+            if (currentState == KeypointTool.KeypointAnnotationState.PlacingKeypoints)
+            {
+                var (start, end) = keypointTool.GetCurrentBoundingBox();
+                DrawBoundingBoxPreview(context, start, end, imageRect, pen);
+                
+                // 显示当前标签和已标记的关键点列表
+                var currentLabel = GetCurrentLabelFromViewModel();
+                var markedLabels = keypointTool.GetMarkedKeypointLabels();
+                DrawKeypointPlacementHint(context, currentLabel, markedLabels, imageRect);
+            }
+        }
+
+        // 绘制骨骼连接线（如果启用且有已标记的关键点）
         if (keypoint.ShowSkeleton)
         {
             DrawSkeleton(context, keypoint, imageRect, pen);
         }
 
-        // 绘制关键点
+        // 绘制已标记的关键点
         foreach (var kp in keypoint.Keypoints)
         {
             if (kp.Visibility == KeypointVisibility.NotAnnotated) continue;
 
             var screenPos = ImageToScreen(kp.Position, imageRect);
-            var radius = 4.0; // 关键点半径
+            var radius = 6.0; // 增大关键点半径以提高可见性
 
             // 根据可见性状态选择颜色
             IBrush keypointBrush;
@@ -502,10 +558,12 @@ public class ImageCanvas : Control
             switch (kp.Visibility)
             {
                 case KeypointVisibility.Visible:
+                    // 可见关键点：明亮的绿色
                     keypointBrush = new SolidColorBrush(Colors.LimeGreen);
                     keypointPen = new Pen(new SolidColorBrush(Colors.DarkGreen), 2);
                     break;
                 case KeypointVisibility.Occluded:
+                    // 遮挡关键点：橙色
                     keypointBrush = new SolidColorBrush(Colors.Orange);
                     keypointPen = new Pen(new SolidColorBrush(Colors.DarkOrange), 2);
                     break;
@@ -513,25 +571,140 @@ public class ImageCanvas : Control
                     continue;
             }
 
-            // 绘制关键点圆圈
-            var keypointRect = new Rect(screenPos.X - radius, screenPos.Y - radius, radius * 2, radius * 2);
-            context.DrawEllipse(keypointBrush, keypointPen, keypointRect);
-
-            // 在选中或绘制状态下显示关键点编号
-            if (keypoint.IsSelected || keypoint == CurrentDrawingAnnotation || isDrawing)
+            // 绘制外边框（阴影效果）
+            context.DrawEllipse(new SolidColorBrush(Colors.Black) { Opacity = 0.3 }, null, 
+                               new Point(screenPos.X + 1, screenPos.Y + 1), radius + 1, radius + 1);
+            
+            // 绘制主体关键点
+            context.DrawEllipse(keypointBrush, keypointPen, screenPos, radius, radius);
+            
+            // 绘制中心点（提高可见性）
+            context.DrawEllipse(new SolidColorBrush(Colors.White), null, screenPos, radius * 0.3, radius * 0.3);
+            
+            // 显示关键点编号（在选中或绘制状态下）
+            if (keypoint.IsSelected || isDrawing)
             {
-                var typeface = new Typeface("Arial", FontStyle.Normal, FontWeight.Bold);
-                var text = new FormattedText(kp.Id.ToString(), 
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    typeface,
-                    10,
-                    new SolidColorBrush(Colors.White));
-
-                var textPos = new Point(screenPos.X - 5, screenPos.Y - 15);
-                context.DrawText(text, textPos);
+                var labelText = new FormattedText($"{kp.Id}: {kp.Name}", 
+                                                  System.Globalization.CultureInfo.CurrentCulture,
+                                                  FlowDirection.LeftToRight,
+                                                  Typeface.Default,
+                                                  10,
+                                                  new SolidColorBrush(Colors.White));
+                var labelPos = new Point(screenPos.X + radius + 2, screenPos.Y - radius);
+                var labelBg = new Rect(labelPos.X - 2, labelPos.Y - 2, labelText.Width + 4, labelText.Height + 4);
+                context.DrawRectangle(new SolidColorBrush(Colors.Black) { Opacity = 0.7 }, null, labelBg);
+                context.DrawText(labelText, labelPos);
             }
         }
+    }
+
+    /// <summary>
+    /// 绘制已完成关键点标注的边界框
+    /// </summary>
+    private void DrawBoundingBoxForKeypoints(DrawingContext context, Point2D start, Point2D end, Rect imageRect, Pen pen, bool isDrawing = false)
+    {
+        // 检查边界框是否有效（避免绘制空的或者无效的边界框）
+        if (start.X == 0 && start.Y == 0 && end.X == 0 && end.Y == 0)
+        {
+            return; // 跳过无效的边界框
+        }
+        
+        var startScreen = ImageToScreen(start, imageRect);
+        var endScreen = ImageToScreen(end, imageRect);
+        
+        var boundingRect = new Rect(startScreen, endScreen);
+        
+        // 确保边界框有最小尺寸
+        if (boundingRect.Width < 1 || boundingRect.Height < 1)
+        {
+            return; // 跳过太小的边界框
+        }
+        
+        // 为已完成的标注使用不同的样式
+        Pen boundingBoxPen;
+        IBrush boundingBoxBrush;
+        
+        if (isDrawing)
+        {
+            // 绘制中的边界框：黄色虚线
+            boundingBoxPen = new Pen(new SolidColorBrush(Colors.Yellow), 2) { DashStyle = DashStyle.Dash };
+            boundingBoxBrush = new SolidColorBrush(Colors.Yellow) { Opacity = 0.1 };
+        }
+        else
+        {
+            // 已完成的边界框：更明显的蓝色实线
+            boundingBoxPen = new Pen(new SolidColorBrush(Colors.DodgerBlue), 2);
+            boundingBoxBrush = new SolidColorBrush(Colors.DodgerBlue) { Opacity = 0.1 };
+        }
+        
+        context.DrawRectangle(boundingBoxBrush, boundingBoxPen, boundingRect);
+    }
+
+    /// <summary>
+    /// 绘制边界框预览
+    /// </summary>
+    private void DrawBoundingBoxPreview(DrawingContext context, Point2D start, Point2D end, Rect imageRect, Pen pen)
+    {
+        var startScreen = ImageToScreen(start, imageRect);
+        var endScreen = ImageToScreen(end, imageRect);
+        
+        var boundingRect = new Rect(startScreen, endScreen);
+        var boundingBoxPen = new Pen(new SolidColorBrush(Colors.Yellow), 2) { DashStyle = DashStyle.Dash };
+        var boundingBoxBrush = new SolidColorBrush(Colors.Yellow) { Opacity = 0.1 };
+        
+        context.DrawRectangle(boundingBoxBrush, boundingBoxPen, boundingRect);
+        
+        // 在边界框上方显示提示文字
+        var hintText = new FormattedText("拖拽绘制人体边界框", 
+                                         System.Globalization.CultureInfo.CurrentCulture,
+                                         FlowDirection.LeftToRight,
+                                         Typeface.Default,
+                                         12,
+                                         new SolidColorBrush(Colors.Yellow));
+        var hintPos = new Point(startScreen.X, startScreen.Y - 20);
+        var hintBg = new Rect(hintPos.X - 4, hintPos.Y - 2, hintText.Width + 8, hintText.Height + 4);
+        context.DrawRectangle(new SolidColorBrush(Colors.Black) { Opacity = 0.8 }, null, hintBg);
+        context.DrawText(hintText, hintPos);
+    }
+
+    /// <summary>
+    /// 绘制关键点标记提示
+    /// </summary>
+    private void DrawKeypointPlacementHint(DrawingContext context, string currentLabel, List<string> markedLabels, Rect imageRect)
+    {
+        var hintText = $"标记关键点: {currentLabel} | 已标记: {markedLabels.Count}个";
+        if (markedLabels.Count > 0)
+        {
+            hintText += $" ({string.Join(", ", markedLabels.Take(3))}{(markedLabels.Count > 3 ? "..." : "")})";
+        }
+        
+        var formattedHint = new FormattedText(hintText, 
+                                             System.Globalization.CultureInfo.CurrentCulture,
+                                             FlowDirection.LeftToRight,
+                                             Typeface.Default,
+                                             14,
+                                             new SolidColorBrush(Colors.White));
+        
+        // 在图像顶部中央显示提示
+        var hintPos = new Point(imageRect.X + (imageRect.Width - formattedHint.Width) / 2, imageRect.Y + 10);
+        var hintBg = new Rect(hintPos.X - 8, hintPos.Y - 4, formattedHint.Width + 16, formattedHint.Height + 8);
+        context.DrawRectangle(new SolidColorBrush(Colors.Blue) { Opacity = 0.8 }, 
+                              new Pen(new SolidColorBrush(Colors.White), 1), hintBg);
+        context.DrawText(formattedHint, hintPos);
+        
+        // 在左上角显示操作提示
+        var operationHint = "A/D-切换标签 | 点击标记 | 右键完成 | Esc-取消";
+        var formattedOperation = new FormattedText(operationHint, 
+                                                   System.Globalization.CultureInfo.CurrentCulture,
+                                                   FlowDirection.LeftToRight,
+                                                   Typeface.Default,
+                                                   12,
+                                                   new SolidColorBrush(Colors.Yellow));
+        
+        var opPos = new Point(imageRect.X + 10, imageRect.Y + 50);
+        var opBg = new Rect(opPos.X - 4, opPos.Y - 2, formattedOperation.Width + 8, formattedOperation.Height + 4);
+        context.DrawRectangle(new SolidColorBrush(Colors.Black) { Opacity = 0.7 }, null, opBg);
+        context.DrawText(formattedOperation, opPos);
     }
 
     private void DrawSkeleton(DrawingContext context, KeypointAnnotation keypoint, Rect imageRect, Pen pen)
@@ -615,6 +788,10 @@ public class ImageCanvas : Control
         {
             HandleLeftClick(position);
         }
+        else if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            HandleRightClick(position);
+        }
 
         e.Handled = true;
         Focus();
@@ -643,6 +820,17 @@ public class ImageCanvas : Control
                     var imageRect = new Rect(PanOffset, new Size(Image.Size.Width * ZoomFactor, Image.Size.Height * ZoomFactor));
                     var imagePoint = ScreenToImage(position, imageRect);
                     _obbTool.UpdateRotation(_rotatingOBB, imagePoint);
+                    InvalidateVisual();
+                }
+            }
+            else if (_isDraggingKeypoint && _draggingKeypoint != null && _keypointTool != null)
+            {
+                // 处理关键点拖拽
+                if (Image != null)
+                {
+                    var imageRect = new Rect(PanOffset, new Size(Image.Size.Width * ZoomFactor, Image.Size.Height * ZoomFactor));
+                    var imagePoint = ScreenToImage(position, imageRect);
+                    _keypointTool.UpdateDraggingKeypoint(imagePoint);
                     InvalidateVisual();
                 }
             }
@@ -677,6 +865,15 @@ public class ImageCanvas : Control
             _rotatingOBB = null;
         }
         
+        // 结束关键点拖拽操作
+        if (_isDraggingKeypoint && _keypointTool != null)
+        {
+            _keypointTool.EndDraggingKeypoint();
+            _isDraggingKeypoint = false;
+            _draggingKeypointAnnotation = null;
+            _draggingKeypoint = null;
+        }
+        
         Cursor = Cursor.Default;
     }
 
@@ -704,7 +901,13 @@ public class ImageCanvas : Control
 
         var imagePoint = ScreenToImage(position, imageRect);
         
-        // 首先检查是否点击了OBB或关键点的特殊控制点
+        // 首先检查是否点击了关键点标注的特殊交互
+        if (HandleKeypointAnnotationInteraction(imagePoint))
+        {
+            return;
+        }
+        
+        // 其次检查是否点击了OBB或其他特殊控制点
         if (HandleSpecialInteraction(imagePoint))
         {
             return;
@@ -726,6 +929,107 @@ public class ImageCanvas : Control
         PointerClickedOnImage?.Invoke(this, imagePoint);
 
         InvalidateVisual();
+    }
+    
+    private void HandleRightClick(Point position)
+    {
+        if (Image == null) return;
+
+        var imageRect = new Rect(PanOffset, new Size(Image.Size.Width * ZoomFactor, Image.Size.Height * ZoomFactor));
+        
+        // Check if click is within image bounds
+        if (!imageRect.Contains(position)) return;
+
+        var imagePoint = ScreenToImage(position, imageRect);
+        
+        // 优先处理关键点标注的完成操作
+        var keypointTool = GetKeypointToolRequested?.Invoke();
+        if (keypointTool != null && keypointTool.GetCurrentState() == KeypointTool.KeypointAnnotationState.PlacingKeypoints)
+        {
+            // 右键完成当前关键点标注
+            if (keypointTool.FinishCurrentAnnotation())
+            {
+                // 通知主视图模型标注已完成
+                var currentAnnotation = keypointTool.GetCurrentAnnotation();
+                if (currentAnnotation != null)
+                {
+                    // 触发标注完成事件
+                    AnnotationCompleted?.Invoke(this, currentAnnotation);
+                }
+                InvalidateVisual();
+                return;
+            }
+        }
+        
+        // 检查是否右键点击了关键点，如果是则切换可见性状态
+        if (Annotations != null)
+        {
+            foreach (var annotation in Annotations)
+            {
+                if (annotation is KeypointAnnotation keypointAnnotation)
+                {
+                    var nearestKeypoint = keypointAnnotation.GetNearestKeypoint(imagePoint, 20.0); // 略大一点的点击区域
+                    if (nearestKeypoint != null)
+                    {
+                        // 获取关键点工具并切换可见性
+                        if (keypointTool != null)
+                        {
+                            keypointTool.ToggleKeypointVisibility(nearestKeypoint);
+                            InvalidateVisual();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 处理关键点标注的特殊交互（灵活标注流程）
+    /// </summary>
+    private bool HandleKeypointAnnotationInteraction(Point2D imagePoint)
+    {
+        // 检查当前绘制的标注是否为关键点标注
+        if (CurrentDrawingAnnotation is KeypointAnnotation currentKeypoint)
+        {
+            var keypointTool = GetKeypointToolRequested?.Invoke();
+            if (keypointTool != null)
+            {
+                var currentState = keypointTool.GetCurrentState();
+                
+                // 在关键点标记阶段处理点击
+                if (currentState == KeypointTool.KeypointAnnotationState.PlacingKeypoints)
+                {
+                    // 从MainViewModel获取当前选择的标签作为关键点标签
+                    var currentLabel = GetCurrentLabelFromViewModel();
+                    if (!string.IsNullOrEmpty(currentLabel))
+                    {
+                        bool placed = keypointTool.HandleKeypointPlacement(imagePoint, currentLabel);
+                        if (placed)
+                        {
+                            InvalidateVisual(); // 刷新显示
+                            return true; // 处理了点击事件
+                        }
+                    }
+                }
+            }
+        }
+        
+        return false; // 没有处理特殊交互
+    }
+
+    /// <summary>
+    /// 从MainViewModel获取当前选择的标签
+    /// </summary>
+    private string GetCurrentLabelFromViewModel()
+    {
+        // 通过父窗口获取MainViewModel
+        if (TopLevel.GetTopLevel(this) is Window window && 
+            window.DataContext is AIlable.ViewModels.MainViewModel viewModel)
+        {
+            return viewModel.CurrentLabel;
+        }
+        return "";
     }
 
     /// <summary>
@@ -771,9 +1075,17 @@ public class ImageCanvas : Control
                 var nearestKeypoint = keypoint.GetNearestKeypoint(imagePoint);
                 if (nearestKeypoint != null)
                 {
-                    // 开始拖拽关键点
-                    // 这里需要设置拖拽状态
-                    return true;
+                    // 获取关键点工具
+                    _keypointTool = GetKeypointToolRequested?.Invoke();
+                    if (_keypointTool != null)
+                    {
+                        // 开始拖拽关键点
+                        _isDraggingKeypoint = true;
+                        _draggingKeypointAnnotation = keypoint;
+                        _draggingKeypoint = nearestKeypoint;
+                        _keypointTool.StartDraggingKeypoint(keypoint, nearestKeypoint);
+                        return true;
+                    }
                 }
             }
         }

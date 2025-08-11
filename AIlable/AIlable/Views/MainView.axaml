@@ -472,6 +472,30 @@
                                HorizontalAlignment="Center"
                                FontWeight="Medium" />
                   </Border>
+                  
+                  <!-- 撤销/重做按钮 -->
+                  <Grid ColumnDefinitions="*,*" Margin="0,8,0,0">
+                    <Button Grid.Column="0"
+                            Content="↺ 撤销"
+                            Command="{Binding UndoCommand}"
+                            Classes="secondary"
+                            Padding="8,6"
+                            CornerRadius="6"
+                            FontSize="10"
+                            Margin="0,0,4,0"
+                            ToolTip.Tip="{Binding LastUndoDescription, StringFormat='Ctrl+Z: {0}'}"
+                            IsEnabled="{Binding CanUndo}" />
+                    <Button Grid.Column="1"
+                            Content="重做 ↻"
+                            Command="{Binding RedoCommand}"
+                            Classes="secondary"
+                            Padding="8,6"
+                            CornerRadius="6"
+                            FontSize="10"
+                            Margin="4,0,0,0"
+                            ToolTip.Tip="{Binding LastRedoDescription, StringFormat='Ctrl+Y: {0}'}"
+                            IsEnabled="{Binding CanRedo}" />
+                  </Grid>
                 </StackPanel>
               </Border>
 

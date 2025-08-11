@@ -15,7 +15,12 @@
       "Bash(test_audio_format.exe)",
       "Bash(dotnet clean:*)",
       "Bash(dotnet-script:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(dir)",
+      "Bash(start AIlable.Desktop.exe)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:christianjmills.com)",
+      "WebFetch(domain:docs.ultralytics.com)"
     ],
     "deny": []
   }

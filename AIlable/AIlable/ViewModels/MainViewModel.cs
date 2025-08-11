@@ -42,6 +42,12 @@ public partial class MainViewModel : ViewModelBase
     public string AIModelStatus => _aiModelManager.HasActiveModel ? "✅ 已加载" : "❌ 未加载";
     public bool HasAIModel => _aiModelManager.HasActiveModel;
     public string CurrentAIModelName => _aiModelManager.ActiveModel?.ModelName ?? "无";
+    
+    // 撤销/重做状态属性
+    public bool CanUndo => _undoRedoService.CanUndo;
+    public bool CanRedo => _undoRedoService.CanRedo;
+    public string? LastUndoDescription => _undoRedoService.LastUndoDescription;
+    public string? LastRedoDescription => _undoRedoService.LastRedoDescription;
 
     // AI标注控制相关属性
     [ObservableProperty] private bool _isAnnotationRunning = false;
@@ -73,6 +79,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly PerformanceMonitorService _performanceMonitor;
     private readonly UserExperienceService _userExperienceService;
     private readonly SmartToolSwitchingService _smartToolSwitching;
+    private readonly UndoRedoService _undoRedoService;
     private IFileDialogService? _fileDialogService;
 
     public MainViewModel()
@@ -95,6 +102,7 @@ public partial class MainViewModel : ViewModelBase
         _performanceMonitor = new PerformanceMonitorService();
         _userExperienceService = new UserExperienceService();
         _smartToolSwitching = new SmartToolSwitchingService(_toolManager);
+        _undoRedoService = new UndoRedoService();
         
         LoadImageCommand = new AsyncRelayCommand(LoadImageAsync);
         CreateNewProjectCommand = new AsyncRelayCommand(CreateNewProjectAsync);
@@ -151,6 +159,27 @@ public partial class MainViewModel : ViewModelBase
         // AI聊天命令
         OpenAIChatCommand = new AsyncRelayCommand(OpenAIChatAsync);
         BackToAnnotationCommand = new RelayCommand(BackToAnnotation);
+        
+        // 撤销/重做命令
+        UndoCommand = new RelayCommand(() => _undoRedoService.Undo(), () => _undoRedoService.CanUndo);
+        RedoCommand = new RelayCommand(() => _undoRedoService.Redo(), () => _undoRedoService.CanRedo);
+        
+        // 订阅撤销服务的属性变化以更新命令状态
+        _undoRedoService.PropertyChanged += (s, e) => 
+        {
+            if (e.PropertyName == nameof(UndoRedoService.CanUndo))
+            {
+                (UndoCommand as RelayCommand)?.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanUndo));
+                OnPropertyChanged(nameof(LastUndoDescription));
+            }
+            if (e.PropertyName == nameof(UndoRedoService.CanRedo))
+            {
+                (RedoCommand as RelayCommand)?.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanRedo));
+                OnPropertyChanged(nameof(LastRedoDescription));
+            }
+        };
 
         // Subscribe to tool manager events
         _toolManager.ActiveToolChanged += OnActiveToolChangedInternal;
@@ -207,6 +236,10 @@ public partial class MainViewModel : ViewModelBase
     // AI聊天命令
     public ICommand OpenAIChatCommand { get; }
     public ICommand BackToAnnotationCommand { get; }
+    
+    // 撤销/重做命令
+    public ICommand UndoCommand { get; }
+    public ICommand RedoCommand { get; }
     
     // 图像导航命令
     public ICommand NextImageCommand { get; }
@@ -289,7 +322,7 @@ public partial class MainViewModel : ViewModelBase
                 if (result != null)
                 {
                     // Polygon completed
-                    AddAnnotation(result);
+                    AddAnnotationWithUndo(result);
                     DrawingState = DrawingState.None;
                     StatusText = $"完成绘制多边形";
                 }
@@ -300,13 +333,30 @@ public partial class MainViewModel : ViewModelBase
                     StatusText = $"继续绘制多边形 (顶点: {polygonTool.CurrentAnnotation?.GetPoints().Count})";
                 }
             }
+            else if (activeTool is KeypointTool keypointTool)
+            {
+                // 特殊处理关键点工具的两阶段流程
+                var result = activeTool.FinishDrawing(imagePoint);
+                
+                if (keypointTool.GetCurrentState() == KeypointTool.KeypointAnnotationState.PlacingKeypoints)
+                {
+                    // 在关键点标记阶段，点击由ImageCanvas的HandleKeypointAnnotationInteraction处理
+                    var markedLabels = keypointTool.GetMarkedKeypointLabels();
+                    StatusText = $"标记关键点: {CurrentLabel} | 已标记: {markedLabels.Count}个 (按Enter完成)";
+                }
+                else if (result != null)
+                {
+                    // 边界框绘制完成，进入关键点标记阶段
+                    StatusText = $"边界框完成，现在选择标签并点击标记关键点位置 (当前标签: {CurrentLabel})";
+                }
+            }
             else
             {
                 // Finish drawing for other tools
                 var result = activeTool.FinishDrawing(imagePoint);
                 if (result != null)
                 {
-                    AddAnnotation(result);
+                    AddAnnotationWithUndo(result);
                     DrawingState = DrawingState.None;
                     StatusText = $"完成绘制 {GetToolDisplayName(ActiveTool)}";
                 }
@@ -334,6 +384,12 @@ public partial class MainViewModel : ViewModelBase
         var activeTool = _toolManager.GetActiveTool();
         if (activeTool != null && activeTool.IsDrawing)
         {
+            // 特殊处理关键点工具
+            if (activeTool is KeypointTool keypointTool)
+            {
+                keypointTool.CancelCurrentAnnotation();
+            }
+            
             activeTool.CancelDrawing();
             DrawingState = DrawingState.None;
             StatusText = "已取消绘制";
@@ -866,6 +922,10 @@ public partial class MainViewModel : ViewModelBase
 
             // 设置当前项目，OnCurrentProjectChanged会处理状态更新
             CurrentProject = newProject;
+            
+            // 清空撤销历史
+            _undoRedoService.Clear();
+            
             StatusText = "已创建新项目，请添加图像开始标注";
 
             // 自动打开添加图像对话框
@@ -893,6 +953,22 @@ public partial class MainViewModel : ViewModelBase
         // 通知命令状态变化
         (ClearAllAnnotationsCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }
+    
+    /// <summary>
+    /// 使用撤销功能添加标注
+    /// </summary>
+    public void AddAnnotationWithUndo(Annotation annotation)
+    {
+        if (CurrentImage == null) return;
+
+        // 设置标注的标签为当前选择的标签
+        annotation.Label = CurrentLabel;
+
+        var command = new AddAnnotationCommand(this, annotation, CurrentImage);
+        _undoRedoService.ExecuteCommand(command);
+        
+        StatusText = $"添加了 [{CurrentLabel}] {annotation.Type} 标注";
+    }
 
     public void RemoveAnnotation(Annotation annotation)
     {
@@ -911,6 +987,19 @@ public partial class MainViewModel : ViewModelBase
         // 通知命令状态变化
         (DeleteSelectedAnnotationCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (ClearAllAnnotationsCommand as RelayCommand)?.NotifyCanExecuteChanged();
+    }
+    
+    /// <summary>
+    /// 使用撤销功能删除标注
+    /// </summary>
+    public void RemoveAnnotationWithUndo(Annotation annotation)
+    {
+        if (CurrentImage == null) return;
+
+        var command = new RemoveAnnotationCommand(this, annotation, CurrentImage);
+        _undoRedoService.ExecuteCommand(command);
+        
+        StatusText = $"已删除 {annotation.Type} 标注";
     }
 
     public void SelectAnnotation(Annotation? annotation)
@@ -934,6 +1023,28 @@ public partial class MainViewModel : ViewModelBase
 
         // 通知命令状态变化
         (DeleteSelectedAnnotationCommand as RelayCommand)?.NotifyCanExecuteChanged();
+    }
+    
+    /// <summary>
+    /// 完成标注（特别是右键完成的关键点标注）
+    /// </summary>
+    public void CompleteAnnotation(Annotation annotation)
+    {
+        if (annotation != null && CurrentImage != null)
+        {
+            // 确保标注被添加到当前图像
+            if (!CurrentImage.Annotations.Contains(annotation))
+            {
+                // 使用撤销/重做系统添加标注
+                var command = new AddAnnotationCommand(this, annotation, CurrentImage);
+                _undoRedoService.ExecuteCommand(command);
+                
+                StatusText = $"已完成 {annotation.Type} 标注: {annotation.Label}";
+            }
+            
+            // 选择刚完成的标注
+            SelectAnnotation(annotation);
+        }
     }
 
     partial void OnCurrentImageChanged(AnnotationImage? value)
@@ -1779,6 +1890,9 @@ public partial class MainViewModel : ViewModelBase
 
             // 加载该图像的标注
             RefreshCurrentImageAnnotations();
+            
+            // 切换图像时清空撤销历史
+            _undoRedoService.Clear();
 
             // 自动适应窗口 - 延迟一点确保图像已完全加载
             System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
@@ -1828,7 +1942,7 @@ public partial class MainViewModel : ViewModelBase
     {
         if (SelectedAnnotation != null)
         {
-            RemoveAnnotation(SelectedAnnotation);
+            RemoveAnnotationWithUndo(SelectedAnnotation);
         }
     }
 
@@ -1836,13 +1950,11 @@ public partial class MainViewModel : ViewModelBase
     {
         if (CurrentImage == null) return;
 
-        var annotationsToRemove = Annotations.ToList();
-        foreach (var annotation in annotationsToRemove)
-        {
-            RemoveAnnotation(annotation);
-        }
-
-        StatusText = $"已清空所有标注 ({annotationsToRemove.Count} 个)";
+        var command = new ClearAllAnnotationsCommand(this, CurrentImage);
+        _undoRedoService.ExecuteCommand(command);
+        
+        var annotationsCount = CurrentImage.Annotations.Count;
+        StatusText = $"已清空所有标注 ({annotationsCount} 个)";
     }
 
     private async Task<bool> ExportYoloWithOptionsAsync(AnnotationProject project, string outputPath)

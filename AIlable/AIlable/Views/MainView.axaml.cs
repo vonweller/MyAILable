@@ -6,6 +6,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using AIlable.ViewModels;
 using AIlable.Controls;
+using AIlable.Models;
+using AIlable.Services;
 
 namespace AIlable.Views;
 
@@ -72,7 +74,9 @@ public partial class MainView : UserControl
                 _imageCanvas.PointerClickedOnImage += OnPointerClickedOnImage;
                 _imageCanvas.PointerMovedOnImage += OnPointerMovedOnImage;
                 _imageCanvas.AnnotationSelected += OnAnnotationSelected;
+                _imageCanvas.AnnotationCompleted += OnAnnotationCompleted;
                 _imageCanvas.GetOBBToolRequested += OnGetOBBToolRequested;
+                _imageCanvas.GetKeypointToolRequested += OnGetKeypointToolRequested;
 
                 // Bind current drawing annotation to canvas
                 UpdateCurrentDrawingAnnotation();
@@ -186,6 +190,26 @@ public partial class MainView : UserControl
             viewModel.SelectAnnotation(annotation);
         }
     }
+    
+    private void OnAnnotationCompleted(object? sender, AIlable.Models.Annotation annotation)
+    {
+        // Handle annotation completion (especially for keypoint annotations via right-click)
+        if (DataContext is MainViewModel viewModel)
+        {
+            CompleteAnnotation(annotation);
+        }
+    }
+    
+    /// <summary>
+    /// 完成标注的辅助方法
+    /// </summary>
+    private void CompleteAnnotation(AIlable.Models.Annotation annotation)
+    {
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.CompleteAnnotation(annotation);
+        }
+    }
 
     private AIlable.Services.OrientedBoundingBoxTool? OnGetOBBToolRequested()
     {
@@ -193,6 +217,16 @@ public partial class MainView : UserControl
         if (DataContext is MainViewModel viewModel)
         {
             return viewModel.ToolManager.GetTool(AIlable.Models.AnnotationTool.OrientedBoundingBox) as AIlable.Services.OrientedBoundingBoxTool;
+        }
+        return null;
+    }
+    
+    private AIlable.Services.KeypointTool? OnGetKeypointToolRequested()
+    {
+        // 返回关键点工具实例
+        if (DataContext is MainViewModel viewModel)
+        {
+            return viewModel.ToolManager.GetTool(AIlable.Models.AnnotationTool.Keypoint) as AIlable.Services.KeypointTool;
         }
         return null;
     }
@@ -220,6 +254,22 @@ public partial class MainView : UserControl
                     // Ctrl+N 新建项目
                     viewModel.CreateNewProjectCommand?.Execute(null);
                     e.Handled = true;
+                    break;
+                case Key.Z:
+                    // Ctrl+Z 撤销
+                    if (viewModel.CanUndo)
+                    {
+                        viewModel.UndoCommand?.Execute(null);
+                        e.Handled = true;
+                    }
+                    break;
+                case Key.Y:
+                    // Ctrl+Y 重做
+                    if (viewModel.CanRedo)
+                    {
+                        viewModel.RedoCommand?.Execute(null);
+                        e.Handled = true;
+                    }
                     break;
             }
             return;
@@ -264,6 +314,37 @@ public partial class MainView : UserControl
                 {
                     viewModel.RemoveAnnotation(viewModel.SelectedAnnotation);
                     e.Handled = true;
+                }
+                break;
+                
+            case Key.Enter:
+                // Enter键快捷完成关键点标注（也可以用右键完成）
+                var keypointToolForEnter = viewModel.ToolManager.GetTool(AIlable.Models.AnnotationTool.Keypoint) as KeypointTool;
+                if (keypointToolForEnter != null && keypointToolForEnter.GetCurrentState() == KeypointTool.KeypointAnnotationState.PlacingKeypoints)
+                {
+                    if (keypointToolForEnter.FinishCurrentAnnotation())
+                    {
+                        var currentAnnotation = keypointToolForEnter.GetCurrentAnnotation();
+                        if (currentAnnotation != null)
+                        {
+                            CompleteAnnotation(currentAnnotation);
+                            viewModel.DrawingState = AIlable.Models.DrawingState.None;
+                            e.Handled = true;
+                        }
+                    }
+                }
+                break;
+                
+            case Key.Space:
+                // 空格键触发姿态标注的自动对称功能
+                if (viewModel.SelectedAnnotation is KeypointAnnotation keypointAnnotation)
+                {
+                    var keypointTool = viewModel.ToolManager.GetTool(AIlable.Models.AnnotationTool.Keypoint) as KeypointTool;
+                    if (keypointTool != null)
+                    {
+                        keypointTool.AutoConnectKeypoints(keypointAnnotation);
+                        e.Handled = true;
+                    }
                 }
                 break;
         }
