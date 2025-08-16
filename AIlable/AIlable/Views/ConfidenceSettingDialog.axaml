@@ -1,0 +1,152 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AIlable.Views.ConfidenceSettingDialog"
+        Title="AI推理置信度设置"
+        Width="480"
+        Height="450"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="#F8F9FA"
+        Icon="/Assets/avalonia-logo.ico">
+    
+    <Window.Styles>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BoxShadow" Value="0 4 12 0 #1A000000"/>
+            <Setter Property="Padding" Value="24"/>
+        </Style>
+        
+        <Style Selector="TextBlock.title">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#1F2937"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        
+        <Style Selector="TextBlock.subtitle">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="Margin" Value="0,0,0,24"/>
+        </Style>
+        
+        <Style Selector="TextBlock.value">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#3B82F6"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,16,0,16"/>
+        </Style>
+        
+        <Style Selector="Slider.modern">
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="Margin" Value="0,8"/>
+        </Style>
+        
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="#3B82F6"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20,12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="8,0"/>
+            <Setter Property="MinWidth" Value="100"/>
+        </Style>
+        
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Background" Value="#2563EB"/>
+        </Style>
+        
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="#F3F4F6"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20,12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="8,0"/>
+            <Setter Property="MinWidth" Value="100"/>
+        </Style>
+        
+        <Style Selector="Button.secondary:pointerover">
+            <Setter Property="Background" Value="#E5E7EB"/>
+        </Style>
+        
+        <Style Selector="Border.info">
+            <Setter Property="Background" Value="#EFF6FF"/>
+            <Setter Property="BorderBrush" Value="#DBEAFE"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,16,0,0"/>
+        </Style>
+        
+        <Style Selector="TextBlock.info">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#1E40AF"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Styles>
+    
+    <Grid Margin="24">
+        <Border Classes="card">
+            <StackPanel>
+                <!-- 标题区域 -->
+                <StackPanel Margin="0,0,0,20">
+                    <TextBlock Classes="title" Text="🎯 AI推理置信度设置"/>
+                    <TextBlock Classes="subtitle" Text="设置AI模型检测结果的最低置信度阈值，只有高于此阈值的检测结果才会被标注"/>
+                </StackPanel>
+                
+                <!-- 置信度设置区域 -->
+                <StackPanel>
+                    <TextBlock Text="置信度阈值" FontSize="16" FontWeight="Medium" Foreground="#374151" Margin="0,0,0,8"/>
+                    
+                    <!-- 置信度值显示 -->
+                    <TextBlock x:Name="ConfidenceValueText" Classes="value" Text="50%"/>
+                    
+                    <!-- 滑块 -->
+                    <Slider x:Name="ConfidenceSlider" 
+                            Classes="modern"
+                            Minimum="0.1" 
+                            Maximum="1.0" 
+                            Value="0.5" 
+                            TickFrequency="0.1"
+                            IsSnapToTickEnabled="False"/>
+                    
+                    <!-- 刻度标签 -->
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="10%" FontSize="12" Foreground="#9CA3AF" HorizontalAlignment="Left"/>
+                        <TextBlock Grid.Column="1" Text="30%" FontSize="12" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="50%" FontSize="12" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="3" Text="70%" FontSize="12" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="4" Text="90%" FontSize="12" Foreground="#9CA3AF" HorizontalAlignment="Right"/>
+                    </Grid>
+                </StackPanel>
+                
+                <!-- 信息提示 -->
+                <Border Classes="info">
+                    <StackPanel>
+                        <TextBlock Classes="info" Text="💡 置信度说明："/>
+                        <TextBlock Classes="info" Text="• 较低值(10%-40%)：检测更多对象，但可能包含误检"/>
+                        <TextBlock Classes="info" Text="• 中等值(50%-70%)：平衡准确性和召回率，推荐使用"/>
+                        <TextBlock Classes="info" Text="• 较高值(80%-90%)：只保留高置信度检测，减少误检"/>
+                    </StackPanel>
+                </Border>
+                
+                <!-- 按钮区域 -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+                    <Button x:Name="CancelButton" Classes="secondary" Content="取消"/>
+                    <Button x:Name="StartButton" Classes="primary" Content="开始标注"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

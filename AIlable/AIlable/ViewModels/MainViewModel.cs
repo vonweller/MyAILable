@@ -1,4 +1,4 @@
-using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 using AIlable.Models;
 using AIlable.Services;
 using AIlable.Controls;
+using AIlable.Views;
 
 namespace AIlable.ViewModels;
 
@@ -1318,8 +1319,8 @@ public partial class MainViewModel : ViewModelBase
 
                     StatusText = $"🤖 正在推理: {image.FileName} ({processedCount + 1}/{unannotatedImages.Count})";
 
-                    // 对单张图像进行推理
-                    var annotations = await _aiModelManager.InferImageAsync(image.FilePath, 0.5f);
+                            // 对单张图像进行推理，使用默认置信度阈值
+                            var annotations = await _aiModelManager.InferImageAsync(image.FilePath, 0.5f);
 
                     // 智能工具切换 - 根据推理结果切换到合适的工具
                     if (annotations.Any())
@@ -2017,7 +2018,7 @@ public partial class MainViewModel : ViewModelBase
     #region AI标注控制方法
 
     /// <summary>
-    /// 开始AI标注
+    /// 开始AI标注 - 先弹出简单的置信度设置对话框，然后执行对应的推理模式
     /// </summary>
     private async Task StartAIAnnotationAsync()
     {
@@ -2035,6 +2036,16 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
+            // 弹出简单的置信度设置对话框
+            var confidenceThreshold = await ShowConfidenceSettingDialogAsync();
+            
+            if (confidenceThreshold == null)
+            {
+                StatusText = "AI标注已取消";
+                return;
+            }
+
+            // 用户确认了设置，现在开始实际的推理流程
             IsAnnotationRunning = true;
             IsAnnotationPaused = false;
             IsAnnotationInProgress = true;
@@ -2046,15 +2057,15 @@ public partial class MainViewModel : ViewModelBase
 
             StatusText = "开始AI标注...";
 
-            // 根据标注模式选择处理方式
+            // 根据标注模式选择处理方式，传递置信度阈值
             if (CurrentAnnotationMode == AnnotationMode.Fast)
             {
-                await RunFastAnnotationAsync(_annotationCancellationTokenSource.Token);
+                await RunFastAnnotationAsync(_annotationCancellationTokenSource.Token, (float)confidenceThreshold.Value);
             }
             else
             {
                 // 预览模式：支持暂停的自动推理未标注图片功能
-                await RunPreviewAnnotationAsync(_annotationCancellationTokenSource.Token);
+                await RunPreviewAnnotationAsync(_annotationCancellationTokenSource.Token, (float)confidenceThreshold.Value);
             }
         }
         catch (OperationCanceledException)
@@ -2077,6 +2088,40 @@ public partial class MainViewModel : ViewModelBase
             TotalCount = 0;
             _annotationCancellationTokenSource?.Dispose();
             _annotationCancellationTokenSource = null;
+        }
+    }
+
+    /// <summary>
+    /// 显示美观的置信度设置对话框
+    /// </summary>
+    private async Task<double?> ShowConfidenceSettingDialogAsync()
+    {
+        try
+        {
+            // 创建美观的置信度设置对话框
+            var dialog = new ConfidenceSettingDialog();
+            dialog.SetInitialConfidence(0.5f); // 设置默认值
+
+            // 获取父窗口
+            var parentWindow = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                ? desktop.MainWindow
+                : null;
+
+            // 显示对话框
+            await dialog.ShowDialog(parentWindow!);
+
+            // 如果用户确认，返回置信度值
+            if (dialog.IsConfirmed)
+            {
+                return dialog.ConfidenceThreshold;
+            }
+
+            return null; // 用户取消
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"显示置信度设置对话框失败: {ex.Message}");
+            return 0.5; // 返回默认值
         }
     }
 
@@ -2105,7 +2150,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// 极速标注模式
     /// </summary>
-    private async Task RunFastAnnotationAsync(CancellationToken cancellationToken)
+    private async Task RunFastAnnotationAsync(CancellationToken cancellationToken, float confidenceThreshold = 0.5f)
     {
         var images = CurrentProject!.Images.ToList();
         var totalImages = images.Count;
@@ -2127,8 +2172,8 @@ public partial class MainViewModel : ViewModelBase
 
             try
             {
-                // 加载图片并运行推理
-                var annotations = await _aiModelManager.InferImageAsync(image.FilePath);
+                // 加载图片并运行推理，传递置信度阈值
+                var annotations = await _aiModelManager.InferImageAsync(image.FilePath, confidenceThreshold);
 
                 if (annotations?.Any() == true)
                 {
@@ -2165,7 +2210,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// 预览标注模式 - 使用进度对话框显示推理过程
     /// </summary>
-    private async Task RunPreviewAnnotationAsync(CancellationToken cancellationToken)
+    private async Task RunPreviewAnnotationAsync(CancellationToken cancellationToken, float confidenceThreshold = 0.5f)
     {
         try
         {
@@ -2259,8 +2304,8 @@ public partial class MainViewModel : ViewModelBase
                             // 等待图像加载完成
                             await Task.Delay(200, cancellationToken);
 
-                            // 对单张图像进行推理
-                            var annotations = await _aiModelManager.InferImageAsync(image.FilePath, 0.5f);
+                            // 对单张图像进行推理，使用用户设置的置信度阈值
+                            var annotations = await _aiModelManager.InferImageAsync(image.FilePath, confidenceThreshold);
 
                             // 添加推理结果到图像
                             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>

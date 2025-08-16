@@ -6,6 +6,20 @@
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+
+        <!-- 单文件发布 -->
+        <PublishSingleFile>true</PublishSingleFile>
+        <!-- 自包含运行时 -->
+        <SelfContained>true</SelfContained>
+        <!-- 运行时标识符（Windows x64） -->
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <!-- 包含本地库用于自我提取 -->
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <!-- 剪裁模式 -->
+        <TrimMode>link</TrimMode>
+        <!-- 启用压缩以减小单文件大小 -->
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        
     </PropertyGroup>
 
     <PropertyGroup>

@@ -1,7 +1,102 @@
+# AIlable项目 - AI推理多线程优化方案
+
+## 问题分析
+
+### 当前性能瓶颈
+1. **单线程推理**: 所有AI模型服务都采用同步单线程推理
+2. **批量处理效率低**: `InferBatchAsync`方法实际上是串行处理每张图片
+3. **UI阻塞**: 大量图片推理时会阻塞UI线程
+4. **资源利用不充分**: 未充分利用多核CPU和GPU资源
+5. **内存管理**: 大图片处理时内存占用过高
+
+### 性能影响
+- **处理时间**: 100张图片可能需要几分钟甚至更长时间
+- **用户体验**: 界面卡顿，无法取消操作
+- **系统资源**: CPU利用率低，内存峰值高
+
+## 多线程优化架构设计
+
+### 1. 整体架构
+
+```mermaid
+graph TB
+    A[UI层] --> B[推理调度器]
+    B --> C[线程池管理器]
+    C --> D[工作线程1]
+    C --> E[工作线程2]
+    C --> F[工作线程N]
+    D --> G[YOLO模型实例1]
+    E --> H[YOLO模型实例2]
+    F --> I[YOLO模型实例N]
+    B --> J[进度管理器]
+    B --> K[结果聚合器]
+    J --> A
+    K --> A
+```
+
+### 2. 核心组件设计
+
+#### 2.1 推理任务调度器 (InferenceScheduler)
+```csharp
+public class InferenceScheduler
+{
+    private readonly SemaphoreSlim _semaphore;
+    private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly IProgress<InferenceProgress> _progressReporter;
+    private readonly ConcurrentQueue<InferenceTask> _taskQueue;
+    private readonly List<Task> _workerTasks;
+    
+    public async Task<Dictionary<string, IEnumerable<Annotation>>> ProcessBatchAsync(
+        IEnumerable<string> imagePaths,
+        float confidenceThreshold,
+        int maxConcurrency = Environment.ProcessorCount,
+        IProgress<InferenceProgress> progress = null,
+        CancellationToken cancellationToken = default)
+}
+```
+
+#### 2.2 推理任务定义 (InferenceTask)
+```csharp
+public class InferenceTask
+{
+    public string ImagePath { get; set; }
+    public float ConfidenceThreshold { get; set; }
+    public TaskCompletionSource<IEnumerable<Annotation>> CompletionSource { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public int RetryCount { get; set; }
+}
+```
+
+#### 2.3 进度报告 (InferenceProgress)
+```csharp
+public class InferenceProgress
+{
+    public int TotalTasks { get; set; }
+    public int CompletedTasks { get; set; }
+    public int FailedTasks { get; set; }
+    public double ProgressPercentage => TotalTasks > 0 ? (double)CompletedTasks / TotalTasks * 100 : 0;
+    public TimeSpan ElapsedTime { get; set; }
+    public TimeSpan EstimatedRemainingTime { get; set; }
+    public string CurrentImagePath { get; set; }
+    public double AverageProcessingTime { get; set; }
+    public long MemoryUsage { get; set; }
+}
+```
+
+## 具体实现方案
+
+### 1. 多线程YOLO模型服务
+
+<write_to_file>
+<path>AIlable/AIlable/Services/MultiThreadYoloModelService.cs</path>
+<content>
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -13,15 +108,18 @@ using AIlable.Models;
 namespace AIlable.Services;
 
 /// <summary>
-/// YOLO模型推理服务
+/// 多线程YOLO模型推理服务
 /// </summary>
-public class YoloModelService : IAIModelService
+public class MultiThreadYoloModelService : IAIModelService
 {
-    private InferenceSession? _session;
+    private readonly object _lockObject = new();
+    private readonly List<InferenceSession> _sessions = new();
+    private readonly SemaphoreSlim _sessionSemaphore;
     private string[]? _classNames;
     private readonly List<string> _projectLabels;
+    private string _modelPath = string.Empty;
     
-    public bool IsModelLoaded => _session != null;
+    public bool IsModelLoaded => _sessions.Count > 0;
     public string ModelName { get; private set; } = string.Empty;
     public AIModelType ModelType => AIModelType.YOLO;
     
@@ -29,13 +127,19 @@ public class YoloModelService : IAIModelService
     private const int InputWidth = 640;
     private const int InputHeight = 640;
     
+    // 默认最大并发数
+    private readonly int _maxConcurrency;
+    
     /// <summary>
     /// 构造函数
     /// </summary>
-    /// <param name="projectLabels">项目标签列表，如果为null则使用默认COCO标签</param>
-    public YoloModelService(List<string>? projectLabels = null)
+    /// <param name="projectLabels">项目标签列表</param>
+    /// <param name="maxConcurrency">最大并发数，默认为CPU核心数</param>
+    public MultiThreadYoloModelService(List<string>? projectLabels = null, int maxConcurrency = 0)
     {
         _projectLabels = projectLabels ?? new List<string>();
+        _maxConcurrency = maxConcurrency > 0 ? maxConcurrency : Environment.ProcessorCount;
+        _sessionSemaphore = new SemaphoreSlim(_maxConcurrency, _maxConcurrency);
     }
     
     public async Task<bool> LoadModelAsync(string modelPath)
@@ -48,24 +152,75 @@ public class YoloModelService : IAIModelService
                 return false;
             }
             
-            // 创建ONNX运行时会话
-            var sessionOptions = new SessionOptions();
-            _session = new InferenceSession(modelPath, sessionOptions);
-            
+            _modelPath = modelPath;
             ModelName = Path.GetFileNameWithoutExtension(modelPath);
             
-            // 尝试加载类别名称文件
+            // 创建多个ONNX运行时会话实例
+            var sessionOptions = GetOptimalSessionOptions();
+            
+            lock (_lockObject)
+            {
+                // 清理现有会话
+                foreach (var session in _sessions)
+                {
+                    session?.Dispose();
+                }
+                _sessions.Clear();
+                
+                // 创建多个会话实例
+                for (int i = 0; i < _maxConcurrency; i++)
+                {
+                    var session = new InferenceSession(modelPath, sessionOptions);
+                    _sessions.Add(session);
+                }
+            }
+            
+            // 加载类别名称
             await LoadClassNamesAsync(modelPath);
             
-            Console.WriteLine($"YOLO model loaded successfully: {ModelName}");
+            Console.WriteLine($"Multi-thread YOLO model loaded successfully: {ModelName} with {_maxConcurrency} instances");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading YOLO model: {ex.Message}");
+            Console.WriteLine($"Error loading multi-thread YOLO model: {ex.Message}");
             UnloadModel();
             return false;
         }
+    }
+    
+    private SessionOptions GetOptimalSessionOptions()
+    {
+        var options = new SessionOptions();
+        
+        // 根据平台优化配置
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
+        {
+            // 移动平台优化
+            options.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
+            options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC;
+            options.EnableMemoryPattern = false; // 减少内存使用
+        }
+        else if (OperatingSystem.IsBrowser())
+        {
+            // Browser平台优化
+            options.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
+            options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC;
+        }
+        else
+        {
+            // Desktop平台优化
+            options.ExecutionMode = ExecutionMode.ORT_PARALLEL;
+            options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+            options.EnableCpuMemArena = true;
+            options.EnableMemoryPattern = true;
+            
+            // 设置线程数
+            options.IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / _maxConcurrency);
+            options.InterOpNumThreads = 1; // 避免过度并行化
+        }
+        
+        return options;
     }
     
     private async Task LoadClassNamesAsync(string modelPath)
@@ -77,10 +232,6 @@ public class YoloModelService : IAIModelService
             {
                 _classNames = _projectLabels.ToArray();
                 Console.WriteLine($"使用项目标签: {_classNames.Length} 个类别");
-                foreach (var label in _classNames)
-                {
-                    Console.WriteLine($"  - {label}");
-                }
                 return;
             }
             
@@ -107,7 +258,7 @@ public class YoloModelService : IAIModelService
                 }
             }
             
-            // 如果找不到类别文件，使用默认的COCO类别
+            // 使用默认COCO类别
             _classNames = GetCocoClassNames();
             Console.WriteLine("使用默认COCO类别名称");
         }
@@ -135,32 +286,32 @@ public class YoloModelService : IAIModelService
         };
     }
     
-    /// <summary>
-    /// 更新项目标签
-    /// </summary>
-    /// <param name="projectLabels">新的项目标签列表</param>
     public void UpdateProjectLabels(List<string> projectLabels)
     {
         _projectLabels.Clear();
         _projectLabels.AddRange(projectLabels);
         
-        // 如果模型已加载，更新类别名称
-        if (IsModelLoaded)
+        if (IsModelLoaded && _projectLabels.Count > 0)
         {
-            if (_projectLabels.Count > 0)
-            {
-                _classNames = _projectLabels.ToArray();
-                Console.WriteLine($"更新模型类别为项目标签: {_classNames.Length} 个类别");
-            }
+            _classNames = _projectLabels.ToArray();
+            Console.WriteLine($"更新模型类别为项目标签: {_classNames.Length} 个类别");
         }
     }
     
     public void UnloadModel()
     {
-        _session?.Dispose();
-        _session = null;
+        lock (_lockObject)
+        {
+            foreach (var session in _sessions)
+            {
+                session?.Dispose();
+            }
+            _sessions.Clear();
+        }
+        
         _classNames = null;
         ModelName = string.Empty;
+        _modelPath = string.Empty;
     }
     
     public async Task<IEnumerable<Annotation>> InferAsync(string imagePath, float confidenceThreshold = 0.5f)
@@ -170,8 +321,21 @@ public class YoloModelService : IAIModelService
             return Array.Empty<Annotation>();
         }
         
+        // 获取一个可用的会话
+        await _sessionSemaphore.WaitAsync();
+        
         try
         {
+            InferenceSession session;
+            lock (_lockObject)
+            {
+                session = _sessions.FirstOrDefault();
+                if (session == null)
+                {
+                    return Array.Empty<Annotation>();
+                }
+            }
+            
             using var image = await Image.LoadAsync<Rgb24>(imagePath);
             var originalWidth = image.Width;
             var originalHeight = image.Height;
@@ -180,10 +344,10 @@ public class YoloModelService : IAIModelService
             var input = PreprocessImage(image);
             
             // 运行推理
-            var inputName = _session!.InputMetadata.Keys.FirstOrDefault() ?? "images";
+            var inputName = session.InputMetadata.Keys.FirstOrDefault() ?? "images";
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
             
-            using var results = _session.Run(inputs);
+            using var results = session.Run(inputs);
             var output = results.FirstOrDefault()?.AsTensor<float>();
             
             if (output == null)
@@ -197,19 +361,156 @@ public class YoloModelService : IAIModelService
             Console.WriteLine($"Error during YOLO inference: {ex.Message}");
             return Array.Empty<Annotation>();
         }
+        finally
+        {
+            _sessionSemaphore.Release();
+        }
     }
     
-    public async Task<Dictionary<string, IEnumerable<Annotation>>> InferBatchAsync(IEnumerable<string> imagePaths, float confidenceThreshold = 0.5f)
+    public async Task<Dictionary<string, IEnumerable<Annotation>>> InferBatchAsync(
+        IEnumerable<string> imagePaths, 
+        float confidenceThreshold = 0.5f)
     {
-        var results = new Dictionary<string, IEnumerable<Annotation>>();
+        var imagePathsList = imagePaths.ToList();
+        var results = new ConcurrentDictionary<string, IEnumerable<Annotation>>();
         
-        foreach (var imagePath in imagePaths)
+        // 使用并行处理
+        var parallelOptions = new ParallelOptions
         {
-            var annotations = await InferAsync(imagePath, confidenceThreshold);
-            results[imagePath] = annotations;
+            MaxDegreeOfParallelism = _maxConcurrency,
+            CancellationToken = CancellationToken.None
+        };
+        
+        await Parallel.ForEachAsync(imagePathsList, parallelOptions, async (imagePath, ct) =>
+        {
+            try
+            {
+                var annotations = await InferAsync(imagePath, confidenceThreshold);
+                results[imagePath] = annotations;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing {imagePath}: {ex.Message}");
+                results[imagePath] = Array.Empty<Annotation>();
+            }
+        });
+        
+        return new Dictionary<string, IEnumerable<Annotation>>(results);
+    }
+    
+    /// <summary>
+    /// 高级批量推理，支持进度报告和取消
+    /// </summary>
+    public async Task<Dictionary<string, IEnumerable<Annotation>>> InferBatchAdvancedAsync(
+        IEnumerable<string> imagePaths,
+        float confidenceThreshold = 0.5f,
+        IProgress<InferenceProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var imagePathsList = imagePaths.ToList();
+        var results = new ConcurrentDictionary<string, IEnumerable<Annotation>>();
+        var completed = 0;
+        var failed = 0;
+        var stopwatch = Stopwatch.StartNew();
+        var processingTimes = new ConcurrentQueue<double>();
+        
+        // 初始进度报告
+        var totalTasks = imagePathsList.Count;
+        progress?.Report(new InferenceProgress
+        {
+            TotalTasks = totalTasks,
+            CompletedTasks = 0,
+            FailedTasks = 0,
+            ElapsedTime = TimeSpan.Zero,
+            EstimatedRemainingTime = TimeSpan.Zero,
+            CurrentImagePath = string.Empty,
+            AverageProcessingTime = 0,
+            MemoryUsage = GC.GetTotalMemory(false)
+        });
+        
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = _maxConcurrency,
+            CancellationToken = cancellationToken
+        };
+        
+        try
+        {
+            await Parallel.ForEachAsync(imagePathsList, parallelOptions, async (imagePath, ct) =>
+            {
+                var taskStopwatch = Stopwatch.StartNew();
+                
+                try
+                {
+                    ct.ThrowIfCancellationRequested();
+                    
+                    var annotations = await InferAsync(imagePath, confidenceThreshold);
+                    results[imagePath] = annotations;
+                    
+                    taskStopwatch.Stop();
+                    processingTimes.Enqueue(taskStopwatch.Elapsed.TotalMilliseconds);
+                    
+                    var completedCount = Interlocked.Increment(ref completed);
+                    
+                    // 报告进度
+                    if (progress != null)
+                    {
+                        var avgTime = processingTimes.Count > 0 ? processingTimes.Average() : 0;
+                        var remaining = totalTasks - completedCount;
+                        var estimatedRemaining = TimeSpan.FromMilliseconds(avgTime * remaining);
+                        
+                        progress.Report(new InferenceProgress
+                        {
+                            TotalTasks = totalTasks,
+                            CompletedTasks = completedCount,
+                            FailedTasks = failed,
+                            ElapsedTime = stopwatch.Elapsed,
+                            EstimatedRemainingTime = estimatedRemaining,
+                            CurrentImagePath = Path.GetFileName(imagePath),
+                            AverageProcessingTime = avgTime,
+                            MemoryUsage = GC.GetTotalMemory(false)
+                        });
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw; // 重新抛出取消异常
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing {imagePath}: {ex.Message}");
+                    results[imagePath] = Array.Empty<Annotation>();
+                    Interlocked.Increment(ref failed);
+                    Interlocked.Increment(ref completed);
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("Batch inference was cancelled");
         }
         
-        return results;
+        stopwatch.Stop();
+        
+        // 最终进度报告
+        progress?.Report(new InferenceProgress
+        {
+            TotalTasks = totalTasks,
+            CompletedTasks = completed,
+            FailedTasks = failed,
+            ElapsedTime = stopwatch.Elapsed,
+            EstimatedRemainingTime = TimeSpan.Zero,
+            CurrentImagePath = "完成",
+            AverageProcessingTime = processingTimes.Count > 0 ? processingTimes.Average() : 0,
+            MemoryUsage = GC.GetTotalMemory(false)
+        });
+        
+        // 强制垃圾回收
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        
+        return new Dictionary<string, IEnumerable<Annotation>>(results);
     }
     
     private Tensor<float> PreprocessImage(Image<Rgb24> image)
@@ -245,16 +546,14 @@ public class YoloModelService : IAIModelService
         var annotations = new List<Annotation>();
 
         var outputDims = output.Dimensions.ToArray();
-        Console.WriteLine($"YOLO输出维度: [{string.Join(", ", outputDims)}]");
 
         // 检查是否是已经过NMS处理的输出格式 [1, 300, 6]
         if (outputDims.Length == 3 && outputDims[1] <= 300 && outputDims[2] == 6)
         {
-            // 格式: [1, 300, 6] - 已经过NMS处理，每个检测包含: [x1, y1, x2, y2, confidence, class_id]
-            var numDetections = outputDims[1]; // 300
-            Console.WriteLine($"检测到NMS处理后的YOLO格式，最大检测数: {numDetections}");
+            // 格式: [1, 300, 6] - 已经过NMS处理
+            var numDetections = outputDims[1];
 
-            // 计算缩放比例和填充偏移（用于坐标转换）
+            // 计算缩放比例和填充偏移
             var scaleX = (float)InputWidth / originalWidth;
             var scaleY = (float)InputHeight / originalHeight;
             var scale = Math.Min(scaleX, scaleY);
@@ -263,39 +562,25 @@ public class YoloModelService : IAIModelService
             var scaledHeight = originalHeight * scale;
             var padX = (InputWidth - scaledWidth) / 2;
             var padY = (InputHeight - scaledHeight) / 2;
-            
-            Console.WriteLine($"原始尺寸: ({originalWidth}, {originalHeight}), 缩放比例: {scale:F3}, padding: ({padX:F2}, {padY:F2})");
 
             for (int i = 0; i < numDetections; i++)
             {
-                // 提取置信度和类别ID
                 var confidence = output[0, i, 4];
                 var classId = (int)output[0, i, 5];
 
-                // 过滤低置信度检测
                 if (confidence < confidenceThreshold)
-                {
-                    Console.WriteLine($"过滤低置信度检测: {confidence:F2} < {confidenceThreshold:F2}");
                     continue;
-                }
 
-                // 提取边界框坐标 (已经是xyxy格式)
                 var x1_model = output[0, i, 0];
                 var y1_model = output[0, i, 1];
                 var x2_model = output[0, i, 2];
                 var y2_model = output[0, i, 3];
 
-                Console.WriteLine($"模型输出坐标: ({x1_model:F2}, {y1_model:F2}) - ({x2_model:F2}, {y2_model:F2}), 置信度: {confidence:F2}, 类别: {classId}");
-
-                // 转换坐标：从640x640模型坐标系转换到原始图像坐标系
-                // 1. 减去填充偏移
-                // 2. 除以缩放比例
+                // 坐标转换
                 var x1 = (x1_model - padX) / scale;
                 var y1 = (y1_model - padY) / scale;
                 var x2 = (x2_model - padX) / scale;
                 var y2 = (y2_model - padY) / scale;
-
-                Console.WriteLine($"转换后坐标: ({x1:F2}, {y1:F2}) - ({x2:F2}, {y2:F2})");
 
                 // 确保坐标在图像范围内
                 x1 = Math.Max(0, Math.Min(originalWidth, x1));
@@ -303,14 +588,8 @@ public class YoloModelService : IAIModelService
                 x2 = Math.Max(0, Math.Min(originalWidth, x2));
                 y2 = Math.Max(0, Math.Min(originalHeight, y2));
 
-                // 跳过无效的边界框
-                if (x2 <= x1 || y2 <= y1)
-                {
-                    Console.WriteLine($"跳过无效边界框: ({x1:F2}, {y1:F2}) - ({x2:F2}, {y2:F2})");
-                    continue;
-                }
+                if (x2 <= x1 || y2 <= y1) continue;
 
-                // 创建矩形标注
                 var className = GetClassName(classId);
                 var annotation = new RectangleAnnotation
                 {
@@ -318,35 +597,29 @@ public class YoloModelService : IAIModelService
                     Label = $"{className} ({confidence:F2})",
                     TopLeft = new Point2D(x1, y1),
                     BottomRight = new Point2D(x2, y2),
-                    Color = "#FF0000", // 红色
+                    Color = "#FF0000",
                     StrokeWidth = 2,
                     IsVisible = true
                 };
 
                 annotations.Add(annotation);
-                Console.WriteLine($"添加标注: {className} ({confidence:F2}) at ({x1:F0}, {y1:F0}) - ({x2:F0}, {y2:F0})");
             }
         }
         else if (outputDims.Length == 3 && outputDims[1] > outputDims[2])
         {
             // 格式: [1, 84, 8400] -> 需要转置和NMS处理
-            var numFeatures = outputDims[1];  // 84
-            var numDetections = outputDims[2]; // 8400
-
-            Console.WriteLine($"检测到YOLOv8原始格式，特征数: {numFeatures}, 检测数: {numDetections}，需要NMS处理");
+            var numFeatures = outputDims[1];
+            var numDetections = outputDims[2];
             
-            // 收集所有检测结果用于NMS
             var detections = new List<Detection>();
             
             for (int i = 0; i < numDetections; i++)
             {
-                // 提取边界框坐标 (中心点格式)
                 var centerX = output[0, 0, i];
                 var centerY = output[0, 1, i];
                 var width = output[0, 2, i];
                 var height = output[0, 3, i];
 
-                // 找到最高置信度的类别 (从第4个特征开始是类别分数)
                 var maxClassScore = 0.0f;
                 var maxClassIndex = 0;
 
@@ -356,15 +629,13 @@ public class YoloModelService : IAIModelService
                     if (classScore > maxClassScore)
                     {
                         maxClassScore = classScore;
-                        maxClassIndex = j - 4; // 类别索引从0开始
+                        maxClassIndex = j - 4;
                     }
                 }
 
-                // 过滤低置信度检测
                 if (maxClassScore < confidenceThreshold)
                     continue;
                 
-                // 转换为xyxy格式
                 var x1 = centerX - width / 2;
                 var y1 = centerY - height / 2;
                 var x2 = centerX + width / 2;
@@ -379,9 +650,9 @@ public class YoloModelService : IAIModelService
             }
             
             // 应用NMS
-            var nmsResults = ApplyNMS(detections, 0.45f); // IoU阈值
+            var nmsResults = ApplyNMS(detections, 0.45f);
             
-            // 转换NMS结果为标注
+            // 转换为标注
             var scaleX = (float)InputWidth / originalWidth;
             var scaleY = (float)InputHeight / originalHeight;
             var scale = Math.Min(scaleX, scaleY);
@@ -393,13 +664,11 @@ public class YoloModelService : IAIModelService
             
             foreach (var detection in nmsResults)
             {
-                // 坐标转换
                 var x1 = (detection.X1 - padX) / scale;
                 var y1 = (detection.Y1 - padY) / scale;
                 var x2 = (detection.X2 - padX) / scale;
                 var y2 = (detection.Y2 - padY) / scale;
 
-                // 确保坐标在图像范围内
                 x1 = Math.Max(0, Math.Min(originalWidth, x1));
                 y1 = Math.Max(0, Math.Min(originalHeight, y1));
                 x2 = Math.Max(0, Math.Min(originalWidth, x2));
@@ -422,12 +691,7 @@ public class YoloModelService : IAIModelService
                 annotations.Add(annotation);
             }
         }
-        else
-        {
-            Console.WriteLine($"未知的YOLO输出格式: [{string.Join(", ", outputDims)}]");
-        }
 
-        Console.WriteLine($"YOLO推理完成，检测到 {annotations.Count} 个对象");
         return annotations;
     }
     
@@ -440,7 +704,7 @@ public class YoloModelService : IAIModelService
         return $"class_{classIndex}";
     }
     
-    // 检测结果类，用于NMS处理
+    // 检测结果类
     private class Detection
     {
         public float X1 { get; set; }
@@ -452,12 +716,11 @@ public class YoloModelService : IAIModelService
         public float Area => (X2 - X1) * (Y2 - Y1);
     }
     
-    // NMS（非极大值抑制）实现
+    // NMS实现
     private List<Detection> ApplyNMS(List<Detection> detections, float iouThreshold)
     {
         if (detections.Count == 0) return new List<Detection>();
         
-        // 按置信度降序排序
         detections.Sort((a, b) => b.Confidence.CompareTo(a.Confidence));
         
         var result = new List<Detection>();
@@ -469,12 +732,10 @@ public class YoloModelService : IAIModelService
             
             result.Add(detections[i]);
             
-            // 抑制重叠的检测框
             for (int j = i + 1; j < detections.Count; j++)
             {
                 if (suppressed[j]) continue;
                 
-                // 计算IoU
                 var iou = CalculateIoU(detections[i], detections[j]);
                 if (iou > iouThreshold)
                 {
@@ -483,14 +744,12 @@ public class YoloModelService : IAIModelService
             }
         }
         
-        Console.WriteLine($"NMS: {detections.Count} -> {result.Count} 检测结果");
         return result;
     }
     
-    // 计算两个边界框的IoU（交并比）
+    // 计算IoU
     private float CalculateIoU(Detection a, Detection b)
     {
-        // 计算交集区域
         var intersectionX1 = Math.Max(a.X1, b.X1);
         var intersectionY1 = Math.Max(a.Y1, b.Y1);
         var intersectionX2 = Math.Min(a.X2, b.X2);
@@ -503,5 +762,11 @@ public class YoloModelService : IAIModelService
         var unionArea = a.Area + b.Area - intersectionArea;
         
         return unionArea > 0 ? intersectionArea / unionArea : 0.0f;
+    }
+    
+    public void Dispose()
+    {
+        UnloadModel();
+        _sessionSemaphore?.Dispose();
     }
 }
