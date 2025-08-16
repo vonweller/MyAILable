@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -201,14 +202,45 @@ public class YoloModelService : IAIModelService
     
     public async Task<Dictionary<string, IEnumerable<Annotation>>> InferBatchAsync(IEnumerable<string> imagePaths, float confidenceThreshold = 0.5f)
     {
+        var imagePathsList = imagePaths.ToList();
         var results = new Dictionary<string, IEnumerable<Annotation>>();
         
-        foreach (var imagePath in imagePaths)
-        {
-            var annotations = await InferAsync(imagePath, confidenceThreshold);
-            results[imagePath] = annotations;
-        }
+        // 获取系统CPU核心数，限制并发数以避免过度占用资源
+        var maxConcurrency = Math.Min(Environment.ProcessorCount, 4);
+        var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
         
+        Console.WriteLine($"开始批量推理 {imagePathsList.Count} 张图片，最大并发数: {maxConcurrency}");
+        
+        var tasks = imagePathsList.Select(async imagePath =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                var annotations = await InferAsync(imagePath, confidenceThreshold);
+                lock (results)
+                {
+                    results[imagePath] = annotations;
+                }
+                Console.WriteLine($"完成推理: {Path.GetFileName(imagePath)} ({results.Count}/{imagePathsList.Count})");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"推理失败 {imagePath}: {ex.Message}");
+                lock (results)
+                {
+                    results[imagePath] = Array.Empty<Annotation>();
+                }
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+        
+        await Task.WhenAll(tasks);
+        semaphore.Dispose();
+        
+        Console.WriteLine($"批量推理完成，共处理 {results.Count} 张图片");
         return results;
     }
     
@@ -312,13 +344,14 @@ public class YoloModelService : IAIModelService
 
                 // 创建矩形标注
                 var className = GetClassName(classId);
+                var labelColor = LabelColorService.GetColorForLabel(className);
                 var annotation = new RectangleAnnotation
                 {
                     Id = Guid.NewGuid().ToString(),
                     Label = $"{className} ({confidence:F2})",
                     TopLeft = new Point2D(x1, y1),
                     BottomRight = new Point2D(x2, y2),
-                    Color = "#FF0000", // 红色
+                    Color = labelColor, // 使用LabelColorService分配的颜色
                     StrokeWidth = 2,
                     IsVisible = true
                 };
@@ -408,13 +441,14 @@ public class YoloModelService : IAIModelService
                 if (x2 <= x1 || y2 <= y1) continue;
 
                 var className = GetClassName(detection.ClassId);
+                var labelColor = LabelColorService.GetColorForLabel(className);
                 var annotation = new RectangleAnnotation
                 {
                     Id = Guid.NewGuid().ToString(),
                     Label = $"{className} ({detection.Confidence:F2})",
                     TopLeft = new Point2D(x1, y1),
                     BottomRight = new Point2D(x2, y2),
-                    Color = "#FF0000",
+                    Color = labelColor, // 使用LabelColorService分配的颜色
                     StrokeWidth = 2,
                     IsVisible = true
                 };

@@ -1,5 +1,4 @@
 *.png
 *.mdc
-.codebuddy/analysis-summary.json
-AIlable/.claude/settings.local.json
-AIlable/.claude/settings.local.json
+.codebuddy
+AIlable/.claude
