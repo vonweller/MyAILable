@@ -46,15 +46,68 @@ public class AIChatService : IAIChatService, IDisposable
         Console.WriteLine($"[DEBUG] Model: {config.Model}");
         Console.WriteLine($"[DEBUG] Has API Key: {!string.IsNullOrEmpty(config.ApiKey)}");
         
-        // 基础认证headers
-        if (!string.IsNullOrEmpty(config.ApiKey))
+        try
         {
-            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.ApiKey}");
-            Console.WriteLine($"[DEBUG] Added auth header for {config.ProviderType}");
+            // 基础认证headers - 确保API Key只包含ASCII字符
+            if (!string.IsNullOrEmpty(config.ApiKey))
+            {
+                // 验证API Key是否只包含ASCII字符
+                var apiKey = config.ApiKey.Trim();
+                if (IsValidAsciiString(apiKey))
+                {
+                    var authHeaderValue = $"Bearer {apiKey}";
+                    if (IsValidAsciiString(authHeaderValue))
+                    {
+                        _httpClient.DefaultRequestHeaders.Add("Authorization", authHeaderValue);
+                        Console.WriteLine($"[DEBUG] Added auth header for {config.ProviderType}");
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("Authorization header contains non-ASCII characters");
+                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException("API Key contains non-ASCII characters");
+                }
+            }
+            
+            // 添加User-Agent - 使用纯ASCII字符
+            var userAgent = "AIlable-Chat/1.0";
+            if (IsValidAsciiString(userAgent))
+            {
+                _httpClient.DefaultRequestHeaders.Add("User-Agent", userAgent);
+                Console.WriteLine($"[DEBUG] Added User-Agent header: {userAgent}");
+            }
+            else
+            {
+                throw new InvalidOperationException("User-Agent contains non-ASCII characters");
+            }
         }
-        
-        // 添加User-Agent
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "AIlable-Chat/1.0");
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to configure HTTP headers: {ex.Message}");
+            throw new InvalidOperationException($"HTTP headers configuration failed: {ex.Message}", ex);
+        }
+    }
+    
+    /// <summary>
+    /// 验证字符串是否只包含ASCII字符
+    /// </summary>
+    private static bool IsValidAsciiString(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return true;
+            
+        foreach (char c in input)
+        {
+            if (c > 127)
+            {
+                Console.WriteLine($"[ERROR] Non-ASCII character found: '{c}' (code: {(int)c})");
+                return false;
+            }
+        }
+        return true;
     }
     
     public async Task<string> SendMessageAsync(string message, List<ChatMessage> history, CancellationToken cancellationToken = default)
@@ -268,7 +321,7 @@ public class AIChatService : IAIChatService, IDisposable
                     catch (Exception ex)
                     {
                         Console.WriteLine($"[ERROR] Failed to read image: {ex.Message}");
-                        return $"{message.Content} [图片读取失败: {ex.Message}]";
+                        return $"{message.Content} [Image read failed: {ex.Message}]";
                     }
                 }
                 return message.Content;
@@ -298,18 +351,18 @@ public class AIChatService : IAIChatService, IDisposable
                             // qwen-omni-turbo 暂时不支持音频输入，只支持音频输出
                             // 将音频转换为文本描述
                             Console.WriteLine($"[DEBUG] Omni model detected, converting audio to text description");
-                            return $"{message.Content} [用户发送了一段音频，音频长度: {audioBytes.Length} bytes]";
+                            return $"{message.Content} [User sent an audio clip, length: {audioBytes.Length} bytes]";
                         }
                         else
                         {
                             // 普通模型：转换为文本描述
-                            return $"{message.Content} [音频文件: {message.AudioFormat}, 大小: {audioBytes.Length} bytes]";
+                            return $"{message.Content} [Audio file: {message.AudioFormat}, size: {audioBytes.Length} bytes]";
                         }
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"[ERROR] Failed to process audio: {ex.Message}");
-                        return $"{message.Content} [音频处理失败: {ex.Message}]";
+                        return $"{message.Content} [Audio processing failed: {ex.Message}]";
                     }
                 }
                 return message.Content;
@@ -358,7 +411,7 @@ public class AIChatService : IAIChatService, IDisposable
                     catch (Exception ex)
                     {
                         Console.WriteLine($"[ERROR] Failed to process video: {ex.Message}");
-                        return $"{message.Content} [视频处理失败: {ex.Message}]";
+                        return $"{message.Content} [Video processing failed: {ex.Message}]";
                     }
                 }
                 return message.Content;
@@ -373,19 +426,19 @@ public class AIChatService : IAIChatService, IDisposable
                         {
                             var fileContent = Encoding.UTF8.GetString(message.FileData);
                             Console.WriteLine($"[DEBUG] Text file content extracted, length: {fileContent.Length}");
-                            return $"{message.Content}\n\n文件内容 ({message.FileName}):\n```\n{fileContent}\n```";
+                            return $"{message.Content}\n\nFile content ({message.FileName}):\n```\n{fileContent}\n```";
                         }
                         else
                         {
                             var base64File = Convert.ToBase64String(message.FileData);
                             Console.WriteLine($"[DEBUG] Binary file converted to base64, size: {message.FileData.Length} bytes");
-                            return $"{message.Content}\n\n[文件: {message.FileName}, 大小: {message.FileData.Length} bytes, Base64: {base64File.Substring(0, Math.Min(100, base64File.Length))}...]";
+                            return $"{message.Content}\n\n[File: {message.FileName}, size: {message.FileData.Length} bytes, Base64: {base64File.Substring(0, Math.Min(100, base64File.Length))}...]";
                         }
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"[ERROR] Failed to process file: {ex.Message}");
-                        return $"{message.Content} [文件处理失败: {ex.Message}]";
+                        return $"{message.Content} [File processing failed: {ex.Message}]";
                     }
                 }
                 return message.Content;
@@ -452,7 +505,7 @@ public class AIChatService : IAIChatService, IDisposable
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to parse AI response: {ex.Message}");
-            return "解析响应失败";
+            return "Failed to parse response";
         }
     }
     
@@ -613,20 +666,20 @@ public class AIChatService : IAIChatService, IDisposable
                 currentMessage.HasAudioOutput = true;
                 currentMessage.AiAudioData = audioBytes;
                 Console.WriteLine($"[DEBUG STREAM] Saved AI audio output to message: {audioBytes.Length} bytes");
-                return "\n🔊 [AI生成了语音回复，点击播放]";
+                return "\n🔊 [AI generated voice reply, click to play]";
             }
             else
             {
                 // 即使没有currentMessage，也要通知用户有音频数据
                 Console.WriteLine($"[WARNING] Audio data collected but no current message to attach: {audioBytes.Length} bytes");
-                return $"\n🔊 [AI生成了语音回复({audioBytes.Length}字节)，但无法保存播放]";
+                return $"\n🔊 [AI generated voice reply({audioBytes.Length} bytes), but cannot save for playback]";
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[ERROR STREAM] Failed to process AI audio: {ex.Message}");
             Console.WriteLine($"[ERROR STREAM] Audio base64 length: {audioBase64.Length}");
-            return "\n🔊 [AI语音输出处理失败]";
+            return "\n🔊 [AI voice output processing failed]";
         }
     }
     

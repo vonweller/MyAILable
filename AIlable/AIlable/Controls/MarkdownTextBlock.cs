@@ -35,7 +35,7 @@ namespace AIlable.Controls
                 Content = new StackPanel
                 {
                     Name = "ContentPanel",
-                    Spacing = 8
+                    Spacing = 12 // 增加间距
                 }
             };
         }
@@ -107,9 +107,32 @@ namespace AIlable.Controls
 
             // 处理行内代码
             var inlineCodeRegex = new Regex(@"`([^`]+)`");
-            var parts = inlineCodeRegex.Split(text);
             
-            var textPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Vertical, Spacing = 4 };
+            // 如果没有行内代码，直接处理为普通文本
+            if (!inlineCodeRegex.IsMatch(text))
+            {
+                var textBlock = new SelectableTextBlock
+                {
+                    Text = text.Trim(),
+                    FontSize = 14,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 4),
+                    Background = Brushes.Transparent,
+                    Padding = new Thickness(0),
+                    LineHeight = 22, // 增加行高
+                    MaxWidth = 550 // 调整最大宽度
+                };
+                panel.Children.Add(textBlock);
+                return;
+            }
+            
+            // 如果包含行内代码，则需要混合处理
+            var parts = inlineCodeRegex.Split(text);
+            var textPanel = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Vertical,
+                Spacing = 6
+            };
             
             for (int i = 0; i < parts.Length; i++)
             {
@@ -121,9 +144,10 @@ namespace AIlable.Controls
                     var inlineCode = new Border
                     {
                         Background = new SolidColorBrush(Color.FromRgb(245, 245, 245)),
-                        CornerRadius = new CornerRadius(3),
-                        Padding = new Thickness(4, 2),
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(6, 4),
                         Margin = new Thickness(0, 2),
+                        HorizontalAlignment = HorizontalAlignment.Left,
                         Child = new TextBlock
                         {
                             Text = parts[i],
@@ -136,21 +160,18 @@ namespace AIlable.Controls
                 }
                 else // 普通文本
                 {
-                    var lines = parts[i].Split('\n');
-                    foreach (var line in lines)
+                    if (!string.IsNullOrWhiteSpace(parts[i]))
                     {
-                        if (!string.IsNullOrEmpty(line.Trim()))
+                        var textBlock = new TextBlock
                         {
-                            textPanel.Children.Add(new SelectableTextBlock
-                            {
-                                Text = line.Trim(),
-                                FontSize = 14,
-                                TextWrapping = TextWrapping.Wrap,
-                                Margin = new Thickness(0, 2),
-                                Background = Brushes.Transparent,
-                                Padding = new Thickness(0)
-                            });
-                        }
+                            Text = parts[i].Trim(),
+                            FontSize = 14,
+                            TextWrapping = TextWrapping.Wrap,
+                            LineHeight = 22,
+                            MaxWidth = 550,
+                            Margin = new Thickness(0, 2)
+                        };
+                        textPanel.Children.Add(textBlock);
                     }
                 }
             }

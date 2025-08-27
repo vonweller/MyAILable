@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -66,8 +67,42 @@ public partial class AIChatViewModel : ViewModelBase
         {
             Console.WriteLine("[DEBUG VM] Loading saved providers...");
             
-            // 加载保存的配置
+            // 首先检查配置文件是否被严重污染
             var savedProviders = await _configurationService.LoadProvidersAsync();
+            bool configurationCorrupted = false;
+            
+            if (savedProviders.Count > 0)
+            {
+                foreach (var provider in savedProviders)
+                {
+                    if (!string.IsNullOrEmpty(provider.ApiKey) && provider.ApiKey.Length > 50)
+                    {
+                        Console.WriteLine($"[WARNING VM] Detected corrupted API Key in {provider.DisplayName}: length {provider.ApiKey.Length}");
+                        configurationCorrupted = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (configurationCorrupted)
+            {
+                Console.WriteLine("[WARNING VM] Configuration files are corrupted, resetting...");
+                await _configurationService.ResetConfigurationFilesAsync();
+                
+                // 重新初始化默认配置
+                InitializeProviders();
+                if (AvailableProviders.Count > 0)
+                {
+                    SelectedProvider = AvailableProviders[0];
+                }
+                return;
+            }
+            
+            // 如果配置没有被污染，正常清理
+            await _configurationService.CleanConfigurationFilesAsync();
+            
+            // 重新加载保存的配置
+            savedProviders = await _configurationService.LoadProvidersAsync();
             
             // 初始化默认配置
             InitializeProviders();
@@ -83,14 +118,15 @@ public partial class AIChatViewModel : ViewModelBase
                     
                     if (existingProvider != null)
                     {
-                        // 更新保存的API Key和其他配置
-                        existingProvider.ApiKey = savedProvider.ApiKey;
+                        // 更新保存的API Key和其他配置，并清理非ASCII字符
+                        existingProvider.ApiKey = CleanApiKey(savedProvider.ApiKey);
                         existingProvider.ApiUrl = savedProvider.ApiUrl;
                         existingProvider.Model = savedProvider.Model;
                         existingProvider.Temperature = savedProvider.Temperature;
                         existingProvider.MaxTokens = savedProvider.MaxTokens;
                         
                         Console.WriteLine($"[DEBUG VM] Updated provider {existingProvider.DisplayName} with saved config");
+                        Console.WriteLine($"[DEBUG VM] Cleaned API Key length: {existingProvider.ApiKey?.Length ?? 0}");
                     }
                 }
             }
@@ -99,12 +135,22 @@ public partial class AIChatViewModel : ViewModelBase
             var lastUsedProvider = await _configurationService.GetLastUsedProviderAsync();
             if (lastUsedProvider != null)
             {
+                // 清理API Key
+                lastUsedProvider.ApiKey = CleanApiKey(lastUsedProvider.ApiKey);
+                
                 var matchingProvider = AvailableProviders.FirstOrDefault(p => 
                     p.ProviderType == lastUsedProvider.ProviderType && 
                     p.DisplayName == lastUsedProvider.DisplayName);
                 
                 if (matchingProvider != null)
                 {
+                    // 更新配置信息
+                    matchingProvider.ApiKey = lastUsedProvider.ApiKey;
+                    matchingProvider.ApiUrl = lastUsedProvider.ApiUrl;
+                    matchingProvider.Model = lastUsedProvider.Model;
+                    matchingProvider.Temperature = lastUsedProvider.Temperature;
+                    matchingProvider.MaxTokens = lastUsedProvider.MaxTokens;
+                    
                     SelectedProvider = matchingProvider;
                     Console.WriteLine($"[DEBUG VM] Restored last used provider: {matchingProvider.DisplayName}");
                 }
@@ -127,6 +173,40 @@ public partial class AIChatViewModel : ViewModelBase
                 SelectedProvider = AvailableProviders[0];
             }
         }
+    }
+    
+    /// <summary>
+    /// 清理API Key中的非ASCII字符和多余空格
+    /// </summary>
+    private static string CleanApiKey(string? apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey))
+            return string.Empty;
+            
+        // 移除前后空格和控制字符
+        var cleaned = apiKey.Trim();
+        
+        // 移除非ASCII字符（只保留ASCII字符）
+        var result = new StringBuilder();
+        foreach (char c in cleaned)
+        {
+            if (c <= 127 && c >= 32) // 保留可打印的ASCII字符
+            {
+                result.Append(c);
+            }
+            else
+            {
+                Console.WriteLine($"[DEBUG VM] Removed non-ASCII character: '{c}' (code: {(int)c})");
+            }
+        }
+        
+        var finalResult = result.ToString();
+        if (finalResult != cleaned)
+        {
+            Console.WriteLine($"[DEBUG VM] API Key cleaned: '{cleaned}' -> '{finalResult}'");
+        }
+        
+        return finalResult;
     }
     
     public ICommand SendMessageCommand { get; private set; } = null!;

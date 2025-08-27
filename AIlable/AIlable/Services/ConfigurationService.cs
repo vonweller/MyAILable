@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AIlable.Models;
@@ -13,6 +15,8 @@ public interface IConfigurationService
     Task SaveProvidersAsync(List<AIProviderConfig> providers);
     Task<AIProviderConfig?> GetLastUsedProviderAsync();
     Task SaveLastUsedProviderAsync(AIProviderConfig provider);
+    Task CleanConfigurationFilesAsync();
+    Task ResetConfigurationFilesAsync();
 }
 
 public class ConfigurationService : IConfigurationService
@@ -46,6 +50,15 @@ public class ConfigurationService : IConfigurationService
             
             var json = await File.ReadAllTextAsync(_providersFilePath);
             var providers = JsonSerializer.Deserialize<List<AIProviderConfig>>(json, GetJsonOptions());
+            
+            // 清理加载的配置中的API Key
+            if (providers != null)
+            {
+                foreach (var provider in providers)
+                {
+                    provider.ApiKey = CleanApiKey(provider.ApiKey);
+                }
+            }
             
             Console.WriteLine($"[DEBUG CONFIG] Loaded {providers?.Count ?? 0} providers from file");
             return providers ?? new List<AIProviderConfig>();
@@ -90,8 +103,13 @@ public class ConfigurationService : IConfigurationService
                 if (!string.IsNullOrEmpty(providerJson))
                 {
                     var provider = JsonSerializer.Deserialize<AIProviderConfig>(providerJson, GetJsonOptions());
-                    Console.WriteLine($"[DEBUG CONFIG] Loaded last used provider: {provider?.DisplayName}");
-                    return provider;
+                    if (provider != null)
+                    {
+                        // 清理API Key
+                        provider.ApiKey = CleanApiKey(provider.ApiKey);
+                        Console.WriteLine($"[DEBUG CONFIG] Loaded last used provider: {provider.DisplayName}");
+                        return provider;
+                    }
                 }
             }
         }
@@ -140,5 +158,108 @@ public class ConfigurationService : IConfigurationService
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+    }
+    
+    /// <summary>
+    /// 清理API Key中的非ASCII字符和多余空格
+    /// </summary>
+    private static string CleanApiKey(string? apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey))
+            return string.Empty;
+            
+        // 移除前后空格和控制字符
+        var cleaned = apiKey.Trim();
+        
+        // 移除非ASCII字符（只保留ASCII字符）
+        var result = new StringBuilder();
+        foreach (char c in cleaned)
+        {
+            if (c <= 127 && c >= 32) // 保留可打印的ASCII字符
+            {
+                result.Append(c);
+            }
+            else
+            {
+                Console.WriteLine($"[DEBUG CONFIG] Removed non-ASCII character: '{c}' (code: {(int)c})");
+            }
+        }
+        
+        var finalResult = result.ToString();
+        if (finalResult != cleaned)
+        {
+            Console.WriteLine($"[DEBUG CONFIG] API Key cleaned: original length {cleaned.Length} -> final length {finalResult.Length}");
+        }
+        
+        return finalResult;
+    }
+    
+    /// <summary>
+    /// 清理并重新保存配置文件，移除所有非ASCII字符
+    /// </summary>
+    public async Task CleanConfigurationFilesAsync()
+    {
+        try
+        {
+            Console.WriteLine("[DEBUG CONFIG] Starting configuration files cleanup...");
+            
+            // 清理providers.json
+            if (File.Exists(_providersFilePath))
+            {
+                var providers = await LoadProvidersAsync();
+                await SaveProvidersAsync(providers); // 保存时会自动清理
+                Console.WriteLine($"[DEBUG CONFIG] Cleaned providers.json");
+            }
+            
+            // 清理settings.json
+            if (File.Exists(_settingsFilePath))
+            {
+                var lastUsed = await GetLastUsedProviderAsync();
+                if (lastUsed != null)
+                {
+                    await SaveLastUsedProviderAsync(lastUsed); // 保存时会自动清理
+                    Console.WriteLine($"[DEBUG CONFIG] Cleaned settings.json");
+                }
+            }
+            
+            Console.WriteLine("[DEBUG CONFIG] Configuration cleanup completed successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR CONFIG] Failed to clean configuration files: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// 完全重置配置文件，删除所有保存的配置
+    /// </summary>
+    public Task ResetConfigurationFilesAsync()
+    {
+        try
+        {
+            Console.WriteLine("[DEBUG CONFIG] Resetting all configuration files...");
+            
+            // 删除providers.json
+            if (File.Exists(_providersFilePath))
+            {
+                File.Delete(_providersFilePath);
+                Console.WriteLine($"[DEBUG CONFIG] Deleted providers.json");
+            }
+            
+            // 删除settings.json
+            if (File.Exists(_settingsFilePath))
+            {
+                File.Delete(_settingsFilePath);
+                Console.WriteLine($"[DEBUG CONFIG] Deleted settings.json");
+            }
+            
+            Console.WriteLine("[DEBUG CONFIG] Configuration reset completed successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR CONFIG] Failed to reset configuration files: {ex.Message}");
+        }
+        
+        return Task.CompletedTask;
     }
 }
