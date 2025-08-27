@@ -67,6 +67,13 @@ namespace AIlable.Controls
 
         private void ParseMarkdown(string text, StackPanel panel)
         {
+            // 检查是否是思考过程内容（由AI服务标记）
+            if (IsThinkingContent(text))
+            {
+                AddThinkingContent(text, panel);
+                return;
+            }
+            
             // 代码块正则表达式
             var codeBlockRegex = new Regex(@"```(\w+)?\n(.*?)\n```", RegexOptions.Singleline | RegexOptions.IgnoreCase);
             // 行内代码正则表达式
@@ -319,6 +326,103 @@ namespace AIlable.Controls
             {
                 Console.WriteLine($"[ERROR] 复制到剪贴板失败: {ex.Message}");
             }
+        }
+        
+        /// <summary>
+        /// 检查文本是否为思考过程内容
+        /// </summary>
+        private bool IsThinkingContent(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            
+            // 检查是否包含思考标识符
+            return text.Contains("💭 ") || 
+                   text.Contains("思考中") || 
+                   text.StartsWith("<thinking>") ||
+                   text.Contains("reasoning") ||
+                   (
+                       text.Length > 50 && 
+                       !text.Contains("\n\n") && 
+                       !text.Contains("```") &&
+                       (
+                           text.Contains("首先") ||
+                           text.Contains("然后") ||
+                           text.Contains("所以") ||
+                           text.Contains("因为") ||
+                           text.Contains("考虑") ||
+                           text.Contains("分析")
+                       )
+                   );
+        }
+        
+        /// <summary>
+        /// 添加思考过程内容的特殊样式
+        /// </summary>
+        private void AddThinkingContent(string text, StackPanel panel)
+        {
+            var thinkingContainer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(20, 100, 150, 255)), // 淡蓝色背景
+                BorderBrush = new SolidColorBrush(Color.FromRgb(100, 150, 255)),
+                BorderThickness = new Thickness(2, 0, 0, 0), // 左侧蓝色边框
+                CornerRadius = new CornerRadius(0, 4, 4, 0),
+                Padding = new Thickness(12, 8),
+                Margin = new Thickness(0, 4),
+                MaxWidth = 550
+            };
+            
+            var thinkingPanel = new StackPanel { Spacing = 4 };
+            
+            // 思考标题
+            var header = new StackPanel 
+            { 
+                Orientation = Avalonia.Layout.Orientation.Horizontal, 
+                Spacing = 8,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            
+            var thinkingIcon = new TextBlock
+            {
+                Text = "💭",
+                FontSize = 16,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            var thinkingLabel = new TextBlock
+            {
+                Text = "AI思考过程",
+                FontSize = 12,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(70, 120, 200)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            header.Children.Add(thinkingIcon);
+            header.Children.Add(thinkingLabel);
+            thinkingPanel.Children.Add(header);
+            
+            // 思考内容
+            var cleanedText = text
+                .Replace("💭 **思考中...** ", "")
+                .Replace("💭 ", "")
+                .Replace("<thinking>", "")
+                .Replace("</thinking>", "")
+                .Trim();
+            
+            var contentBlock = new SelectableTextBlock
+            {
+                Text = cleanedText,
+                FontSize = 13,
+                FontStyle = FontStyle.Italic,
+                Foreground = new SolidColorBrush(Color.FromRgb(90, 90, 90)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 20,
+                MaxWidth = 520
+            };
+            
+            thinkingPanel.Children.Add(contentBlock);
+            thinkingContainer.Child = thinkingPanel;
+            panel.Children.Add(thinkingContainer);
         }
     }
 }

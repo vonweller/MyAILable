@@ -94,6 +94,56 @@ public class AIChatService : IAIChatService, IDisposable
     /// <summary>
     /// 验证字符串是否只包含ASCII字符
     /// </summary>
+    /// <summary>
+    /// 检查文本是否为思考过程内容
+    /// </summary>
+    private static bool IsThinkingContent(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        
+        // 检查是否包含思考标识符
+        var thinkingKeywords = new[]
+        {
+            "<thinking>", "</thinking>",
+            "我需要思考", "让我思考", "让我分析",
+            "首先我需要", "我应该先", "我应该考虑",
+            "这需要仔细", "让我仔细分析", "我要仔细考虑",
+            "从问题出发", "根据问题", "针对这个问题",
+            "第一步", "第二步", "第三步",
+            "分步骤", "按步骤", "逐步",
+            "我先来", "让我先", "首先要"
+        };
+        
+        foreach (var keyword in thinkingKeywords)
+        {
+            if (text.Contains(keyword))
+            {
+                return true;
+            }
+        }
+        
+        // 检查是否为长文本且包含通常的思考模式
+        if (text.Length > 50 && 
+            !text.Contains("\n\n") && 
+            !text.Contains("```"))
+        {
+            var reasoningPatterns = new[]
+            {
+                "首先", "然后", "所以", "因为", "考虑", "分析",
+                "因此", "由于", "可以看出", "可以知道", "显然",
+                "接下来", "综上所述", "总的来说", "总之"
+            };
+            
+            var patternCount = reasoningPatterns.Count(pattern => text.Contains(pattern));
+            if (patternCount >= 2)
+            {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
     private static bool IsValidAsciiString(string input)
     {
         if (string.IsNullOrEmpty(input))
@@ -545,17 +595,58 @@ public class AIChatService : IAIChatService, IDisposable
                         {
                             Console.WriteLine($"[DEBUG STREAM] Found 'delta' property");
                             
-                            // 处理文本内容
-                            if (delta.TryGetProperty("content", out var content))
+                            // 输出所有delta属性以便调试
+                            Console.WriteLine("[DEBUG STREAM] Delta properties:");
+                            foreach (var prop in delta.EnumerateObject())
                             {
-                                textContent = content.GetString() ?? "";
-                                Console.WriteLine($"[DEBUG STREAM] Found text content: '{textContent}'");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"[DEBUG STREAM] No 'content' in delta");
+                                Console.WriteLine($"[DEBUG STREAM]   - {prop.Name}: {prop.Value.ToString().Substring(0, Math.Min(100, prop.Value.ToString().Length))}...");
                             }
                             
+                            // 处理qvq模型的reasoning_content字段
+                            if (delta.TryGetProperty("reasoning_content", out var reasoningContent))
+                            {
+                                var reasoningText = reasoningContent.GetString();
+                                Console.WriteLine($"[DEBUG STREAM] Found reasoning_content: '{reasoningText}'");
+                                if (!string.IsNullOrEmpty(reasoningText))
+                                {
+                                    // qvq模型的推理内容
+                                    textContent = $"💭 推理中: {reasoningText}";
+                                    Console.WriteLine($"[DEBUG STREAM] Using reasoning_content as thinking process");
+                                }
+                                else
+                                {
+                                    // reasoning_content为null或空，说明推理过程没有暴露
+                                    Console.WriteLine($"[DEBUG STREAM] reasoning_content is null - qvq model reasoning is internal only");
+                                }
+                            }
+                            // 处理传统的reasoning字段
+                            else if (delta.TryGetProperty("reasoning", out var reasoning))
+                            {
+                                var reasoningText = reasoning.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(reasoningText))
+                                {
+                                    textContent = $"💭 推理: {reasoningText}";
+                                    Console.WriteLine($"[DEBUG STREAM] Found traditional reasoning content: '{reasoningText.Substring(0, Math.Min(100, reasoningText.Length))}...'");
+                                }
+                            }
+                            // 处理thinking属性（某些思考模型使用这个字段）
+                            else if (delta.TryGetProperty("thinking", out var thinking))
+                            {
+                                var thinkingText = thinking.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(thinkingText))
+                                {
+                                    textContent = $"💭 思考中: {thinkingText}";
+                                    Console.WriteLine($"[DEBUG STREAM] Found thinking content: '{thinkingText.Substring(0, Math.Min(100, thinkingText.Length))}...'");
+                                }
+                            }
+                            // 处理普通文本内容
+                            else if (delta.TryGetProperty("content", out var content))
+                            {
+                                var contentText = content.GetString() ?? "";
+                                textContent = contentText;
+                                Console.WriteLine($"[DEBUG STREAM] Found regular content: '{contentText}'");
+                            }
+
                             // 处理音频数据（全模态模型特有）
                             if (delta.TryGetProperty("audio", out var audio))
                             {

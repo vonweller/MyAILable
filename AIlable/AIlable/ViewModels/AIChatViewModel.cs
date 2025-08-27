@@ -349,7 +349,17 @@ public partial class AIChatViewModel : ViewModelBase
         }
         
         Console.WriteLine($"[DEBUG VM] Starting to send message: '{InputText.Trim()}'");
-        StatusText = "🚀 正在发送消息...";
+        
+        // 检查是否使用qvq思考模型
+        var isThinkingModel = SelectedProvider?.Model?.Contains("qvq", StringComparison.OrdinalIgnoreCase) == true;
+        if (isThinkingModel)
+        {
+            StatusText = "🧠 正在使用思考模型，推理过程不会实时显示，请稍候...";
+        }
+        else
+        {
+            StatusText = "🚀 正在发送消息...";
+        }
             
         var userMessage = ChatMessage.CreateUserTextMessage(InputText.Trim());
         Messages.Add(userMessage);
@@ -368,7 +378,14 @@ public partial class AIChatViewModel : ViewModelBase
         
         try
         {
-            StatusText = "📡 等待AI响应...";
+            if (isThinkingModel)
+            {
+                StatusText = "🧠 思考模型正在推理中，请耐心等待...";
+            }
+            else
+            {
+                StatusText = "📱 等待AI响应...";
+            }
             
             var history = Messages.Where(m => !m.IsStreaming && m != userMessage).ToList();
             Console.WriteLine($"[DEBUG VM] History count: {history.Count}");
@@ -376,7 +393,14 @@ public partial class AIChatViewModel : ViewModelBase
             var streamResponse = await _chatService.SendMessageStreamAsync(messageToSend, history, assistantMessage, _currentRequestCancellation.Token);
             
             Console.WriteLine($"[DEBUG VM] Got stream response, starting to process chunks");
-            StatusText = "💬 接收AI回复中...";
+            if (isThinkingModel)
+            {
+                StatusText = "🧠 接收思考模型回复中（推理过程在服务端完成）...";
+            }
+            else
+            {
+                StatusText = "💬 接收AI回复中...";
+            }
             
             var chunkCount = 0;
             await foreach (var chunk in streamResponse)
@@ -397,7 +421,14 @@ public partial class AIChatViewModel : ViewModelBase
             }
             
             Console.WriteLine($"[DEBUG VM] Stream completed with {chunkCount} total chunks");
-            StatusText = $"✅ 已连接到 {SelectedProvider.DisplayName} ({SelectedProvider.Model})";
+            if (isThinkingModel)
+            {
+                StatusText = $"⭐ qvq思考模型回复完成 - {SelectedProvider.DisplayName} ({SelectedProvider.Model})";
+            }
+            else
+            {
+                StatusText = $"✅ 已连接到 {SelectedProvider.DisplayName} ({SelectedProvider.Model})";
+            }
         }
         catch (OperationCanceledException)
         {
@@ -411,6 +442,12 @@ public partial class AIChatViewModel : ViewModelBase
             Console.WriteLine($"[ERROR VM] Exception type: {ex.GetType().Name}");
             assistantMessage.Content = $"❌ 错误: {ex.Message}";
             StatusText = $"❌ 请求失败: {ex.Message}";
+            
+            // 如果是思考模型，提供额外提示
+            if (isThinkingModel)
+            {
+                StatusText += " ℹ️ qvq模型的推理过程是在服务端完成的，不会实时显示";
+            }
         }
         finally
         {
