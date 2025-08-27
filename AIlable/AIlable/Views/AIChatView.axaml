@@ -123,26 +123,54 @@
                 <!-- 用户消息 -->
                 <Border Classes="user-message" IsVisible="{Binding IsUser}" MaxWidth="550">
                   <StackPanel>
-                    <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
+                    <SelectableTextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
                     <!-- 图片预览 -->
-                    <Image Source="{Binding ImageFilePath}" MaxHeight="200" MaxWidth="300" 
-                           Margin="0,8,0,0" IsVisible="{Binding HasImage}" />
+                    <Border CornerRadius="8" ClipToBounds="True" Margin="0,8,0,0" 
+                            IsVisible="{Binding HasImage}" 
+                            Background="#F8F9FA" 
+                            BorderBrush="#E9ECEF" 
+                            BorderThickness="1">
+                      <Grid>
+                        <Image x:Name="ChatImage" 
+                               Source="{Binding ImageBitmap}" 
+                               MaxHeight="300" 
+                               MaxWidth="400" 
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                        <!-- 删除按钮 -->
+                        <Button Content="✖" 
+                                Background="#FF6B6B" 
+                                Foreground="White" 
+                                CornerRadius="12" 
+                                Width="24" 
+                                Height="24" 
+                                FontSize="12" 
+                                Padding="0" 
+                                HorizontalAlignment="Right" 
+                                VerticalAlignment="Top" 
+                                Margin="4" 
+                                Command="{Binding $parent[UserControl].((vm:AIChatViewModel)DataContext).DeleteMessageCommand}" 
+                                CommandParameter="{Binding}" 
+                                ToolTip.Tip="删除图片" />
+                      </Grid>
+                    </Border>
                     <!-- 音频信息 -->
                     <Border Background="#E3F2FD" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
                             IsVisible="{Binding HasAudio}">
-                      <TextBlock Text="{Binding AudioFilePath, StringFormat='🎵 音频: {0}'}" FontSize="12" />
+                      <SelectableTextBlock Text="{Binding AudioFilePath, StringFormat='🎵 音频: {0}'}" FontSize="12" />
                     </Border>
                     <!-- 视频信息 -->
                     <Border Background="#F3E5F5" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
                             IsVisible="{Binding HasVideo}">
-                      <TextBlock Text="{Binding VideoFramePaths.Count, StringFormat='🎬 视频: {0}帧'}" FontSize="12" />
+                      <SelectableTextBlock Text="{Binding VideoFramePaths.Count, StringFormat='🎬 视频: {0}帧'}" FontSize="12" />
                     </Border>
                     <!-- 文件信息 -->
                     <Border Background="#F0F0F0" CornerRadius="6" Padding="8,4" Margin="0,4,0,0" 
                             IsVisible="{Binding HasFile}">
-                      <TextBlock Text="{Binding FileName, StringFormat='📎 {0}'}" FontSize="12" />
+                      <SelectableTextBlock Text="{Binding FileName, StringFormat='📎 {0}'}" FontSize="12" />
                     </Border>
-                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm}'}" 
+                    <SelectableTextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm}'}" 
                                FontSize="10" Foreground="#666" HorizontalAlignment="Right" Margin="0,4,0,0" />
                   </StackPanel>
                 </Border>

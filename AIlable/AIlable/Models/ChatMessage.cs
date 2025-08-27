@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Media.Imaging;
+using System.IO;
 
 namespace AIlable.Models;
 
@@ -28,6 +30,7 @@ public partial class ChatMessage : ObservableObject
     [ObservableProperty] private MessageType _type;
     [ObservableProperty] private string _content = string.Empty;
     [ObservableProperty] private string? _imageFilePath;
+    [ObservableProperty] private Bitmap? _imageBitmap;
     [ObservableProperty] private string? _fileName;
     [ObservableProperty] private byte[]? _fileData;
     [ObservableProperty] private DateTime _timestamp = DateTime.Now;
@@ -51,6 +54,28 @@ public partial class ChatMessage : ObservableObject
     public bool HasAudio => Type == MessageType.Audio && (!string.IsNullOrEmpty(AudioFilePath) || AudioData != null);
     public bool HasVideo => Type == MessageType.Video && (VideoFramePaths?.Count > 0 || VideoFrameData?.Count > 0);
     public bool HasMultimodal => Type == MessageType.Multimodal;
+    
+    partial void OnImageFilePathChanged(string? value)
+    {
+        if (!string.IsNullOrEmpty(value) && File.Exists(value))
+        {
+            try
+            {
+                using var stream = File.OpenRead(value);
+                ImageBitmap = new Bitmap(stream);
+                Console.WriteLine($"[DEBUG] Successfully loaded bitmap for: {value}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to load bitmap: {ex.Message}");
+                ImageBitmap = null;
+            }
+        }
+        else
+        {
+            ImageBitmap = null;
+        }
+    }
     
     public ChatMessage() { }
     

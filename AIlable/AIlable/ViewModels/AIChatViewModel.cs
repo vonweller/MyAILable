@@ -222,6 +222,7 @@ public partial class AIChatViewModel : ViewModelBase
     public ICommand ConfigureProviderCommand { get; private set; } = null!;
     public ICommand ToggleConfigPanelCommand { get; private set; } = null!;
     public ICommand PlayAudioCommand { get; private set; } = null!;  // 播放音频命令
+    public ICommand DeleteMessageCommand { get; private set; } = null!;  // 删除消息命令
     
     private void InitializeCommands()
     {
@@ -238,6 +239,7 @@ public partial class AIChatViewModel : ViewModelBase
         ConfigureProviderCommand = new AsyncRelayCommand(ConfigureProviderAsync);
         ToggleConfigPanelCommand = new RelayCommand(() => IsConfigPanelVisible = !IsConfigPanelVisible);
         PlayAudioCommand = new AsyncRelayCommand<ChatMessage>(PlayAudioAsync);
+        DeleteMessageCommand = new RelayCommand<ChatMessage>(DeleteMessage);
     }
     
     private void InitializeProviders()
@@ -430,6 +432,8 @@ public partial class AIChatViewModel : ViewModelBase
         
         try
         {
+            Console.WriteLine("[DEBUG] Starting image attachment process...");
+            
             var imagePath = await _fileDialogService.ShowOpenFileDialogAsync(
                 "选择图片", 
                 new[] { 
@@ -439,15 +443,46 @@ public partial class AIChatViewModel : ViewModelBase
                     }
                 });
                 
+            Console.WriteLine($"[DEBUG] Selected image path: '{imagePath}'");
+                
             if (!string.IsNullOrEmpty(imagePath))
             {
-                var message = ChatMessage.CreateUserImageMessage($"[图片: {Path.GetFileName(imagePath)}]", imagePath);
-                Messages.Add(message);
+                // 验证文件是否存在
+                if (File.Exists(imagePath))
+                {
+                    Console.WriteLine($"[DEBUG] File exists, creating message...");
+                    
+                    // 创建带有图片路径的消息，content可以为空或简单描述
+                    var message = ChatMessage.CreateUserImageMessage(
+                        string.Empty, // 空内容，让图片自己说话
+                        imagePath
+                    );
+                    
+                    Console.WriteLine($"[DEBUG] Created message - Type: {message.Type}, HasImage: {message.HasImage}, ImagePath: '{message.ImageFilePath}'");
+                    
+                    Messages.Add(message);
+                    
+                    Console.WriteLine($"[DEBUG] Added image message to collection. Total messages: {Messages.Count}");
+                    
+                    // 为了调试，更新StatusText
+                    StatusText = $"✅ 已添加图片: {Path.GetFileName(imagePath)}";
+                }
+                else
+                {
+                    StatusText = "所选图片文件不存在";
+                    Console.WriteLine($"[ERROR] File does not exist: {imagePath}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] No image path selected (user cancelled)");
             }
         }
         catch (Exception ex)
         {
             StatusText = $"添加图片失败: {ex.Message}";
+            Console.WriteLine($"[ERROR] AttachImageAsync failed: {ex.Message}");
+            Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
         }
     }
     
@@ -794,6 +829,23 @@ public partial class AIChatViewModel : ViewModelBase
         {
             Console.WriteLine($"[ERROR] Audio playback failed: {ex.Message}");
             StatusText = $"❌ 播放失败: {ex.Message}";
+        }
+    }
+    
+    private void DeleteMessage(ChatMessage? message)
+    {
+        if (message == null) return;
+        
+        try
+        {
+            Messages.Remove(message);
+            StatusText = "✅ 消息已删除";
+            Console.WriteLine($"[DEBUG] Deleted message: {message.Type}, Content: {message.Content.Substring(0, Math.Min(50, message.Content.Length))}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to delete message: {ex.Message}");
+            StatusText = $"❌ 删除失败: {ex.Message}";
         }
     }
 }
