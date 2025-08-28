@@ -243,20 +243,26 @@ namespace AIlable.Services
         {
             try
             {
-                var bitmap = await CaptureFrameAsync();
-                if (bitmap == null)
-                    return false;
-
-                // 确保输出目录存在
-                var directory = Path.GetDirectoryName(outputPath);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                // 使用异步操作，避免阻塞线程
+                return await Task.Run(() =>
                 {
-                    Directory.CreateDirectory(directory);
-                }
+                    // 获取当前帧（快速操作）
+                    var bitmap = GetCurrentFrame();
+                    if (bitmap == null)
+                        return false;
 
-                // 保存图像
-                bitmap.Save(outputPath);
-                return true;
+                    // 确保输出目录存在
+                    var directory = Path.GetDirectoryName(outputPath);
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    // 使用高质量JPEG编码，平衡质量和性能
+                    bitmap.Save(outputPath);
+                    Console.WriteLine($"图像已异步保存: {outputPath}");
+                    return true;
+                });
             }
             catch (Exception ex)
             {

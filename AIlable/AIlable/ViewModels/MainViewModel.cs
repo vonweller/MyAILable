@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -2598,67 +2598,96 @@ public partial class MainViewModel : ViewModelBase
                 HasProject = true;
             }
 
+            // 立即更新UI状态，提供即时反馈
             CameraStatus = "正在捕获图像...";
             StatusText = "正在捕获图像...";
-
+            
             // 生成唯一的文件名
             CaptureCount++;
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var fileName = $"camera_capture_{timestamp}_{CaptureCount:D3}.jpg";
             
-            // 确保项目目录存在
-            string projectDir;
-            if (!string.IsNullOrEmpty(CurrentProject.ProjectPath))
+            // 异步执行所有耗时操作，避免阻塞UI
+            await Task.Run(async () =>
             {
-                projectDir = Path.GetDirectoryName(CurrentProject.ProjectPath) ?? Path.GetTempPath();
-            }
-            else
-            {
-                projectDir = Path.Combine(Path.GetTempPath(), "AIlable_Camera");
-                Directory.CreateDirectory(projectDir);
-            }
-            
-            var outputPath = Path.Combine(projectDir, fileName);
-
-            // 保存捕获的图像
-            var saveSuccess = await CameraService.SaveCapturedImageAsync(outputPath);
-            if (!saveSuccess)
-            {
-                CameraStatus = "图像保存失败";
-                StatusText = "图像保存失败";
-                return;
-            }
-
-            // 创建AnnotationImage并添加到项目
-            var annotationImage = await ImageService.CreateAnnotationImageAsync(outputPath);
-            if (annotationImage != null)
-            {
-                CurrentProject.AddImage(annotationImage);
-                
-                // 切换到新捕获的图像
-                var newImageIndex = CurrentProject.Images.Count - 1;
-                CurrentImageIndex = newImageIndex;
-                LoadImageByIndex(newImageIndex);
-                
-                // 延迟适应窗口
-                _ = Task.Delay(150).ContinueWith(_ =>
+                try
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    // 确保项目目录存在
+                    string projectDir;
+                    if (!string.IsNullOrEmpty(CurrentProject.ProjectPath))
                     {
-                        FitToWindowRequested?.Invoke();
-                    });
-                });
+                        projectDir = Path.GetDirectoryName(CurrentProject.ProjectPath) ?? Path.GetTempPath();
+                    }
+                    else
+                    {
+                        projectDir = Path.Combine(Path.GetTempPath(), "AIlable_Camera");
+                        Directory.CreateDirectory(projectDir);
+                    }
+                    
+                    var outputPath = Path.Combine(projectDir, fileName);
 
-                CameraStatus = $"图像已捕获 ({CaptureCount})";
-                StatusText = $"已成功捕获并保存图像: {fileName}";
-                
-                Console.WriteLine($"摄像头图像已保存: {outputPath}");
-            }
-            else
-            {
-                CameraStatus = "创建图像对象失败";
-                StatusText = "创建图像对象失败";
-            }
+                    // 异步保存捕获的图像
+                    var saveSuccess = await CameraService.SaveCapturedImageAsync(outputPath);
+                    if (!saveSuccess)
+                    {
+                        // 在UI线程更新状态
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            CameraStatus = "图像保存失败";
+                            StatusText = "图像保存失败";
+                        });
+                        return;
+                    }
+
+                    // 异步创建AnnotationImage
+                    var annotationImage = await ImageService.CreateAnnotationImageAsync(outputPath);
+                    if (annotationImage != null)
+                    {
+                        // 在UI线程更新项目和界面
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            CurrentProject.AddImage(annotationImage);
+                            
+                            // 切换到新捕获的图像
+                            var newImageIndex = CurrentProject.Images.Count - 1;
+                            CurrentImageIndex = newImageIndex;
+                            LoadImageByIndex(newImageIndex);
+                            
+                            // 更新状态
+                            CameraStatus = $"图像已捕获 ({CaptureCount})";
+                            StatusText = $"已成功捕获并保存图像: {fileName}";
+                            
+                            Console.WriteLine($"摄像头图像已保存: {outputPath}");
+                        });
+                        
+                        // 延迟适应窗口（异步执行，不阻塞主流程）
+                        _ = Task.Delay(100).ContinueWith(_ =>
+                        {
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            {
+                                FitToWindowRequested?.Invoke();
+                            });
+                        });
+                    }
+                    else
+                    {
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            CameraStatus = "创建图像对象失败";
+                            StatusText = "创建图像对象失败";
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"异步捕获摄像头图像异常: {ex}");
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        CameraStatus = $"捕获图像失败: {ex.Message}";
+                        StatusText = $"捕获图像失败: {ex.Message}";
+                    });
+                }
+            });
         }
         catch (Exception ex)
         {
