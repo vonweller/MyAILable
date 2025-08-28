@@ -718,6 +718,173 @@
                   </StackPanel>
                 </StackPanel>
               </Border>
+
+              <!-- 摄像头拍照 -->
+              <Border Classes="menu-item-container">
+                <Button Content="📷 摄像头拍照"
+                        x:Name="CameraButton"
+                        Classes="sidebar-menu-item"
+                        Click="OnCameraClick" />
+              </Border>
+              <Border x:Name="CameraPanel"
+                      IsVisible="False"
+                      Classes="card animated-panel"
+                      Margin="0,8,0,16"
+                      Padding="16">
+                <StackPanel Spacing="12">
+                  <!-- 摄像头状态显示 -->
+                  <Border Background="{DynamicResource HoverBackgroundBrush}"
+                          CornerRadius="8"
+                          Padding="12">
+                    <StackPanel Spacing="8">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="📷 摄像头状态"
+                                   FontWeight="Medium"
+                                   FontSize="12" />
+                        <Border Background="#FFF3E0"
+                                CornerRadius="12"
+                                Padding="6,3">
+                          <TextBlock Text="Beta"
+                                     FontSize="10"
+                                     Foreground="#FF9800"
+                                     FontWeight="Bold" />
+                        </Border>
+                      </StackPanel>
+
+                      <TextBlock Text="使用摄像头实时拍照添加图像到项目"
+                                 FontSize="11"
+                                 Classes="secondary"
+                                 TextWrapping="Wrap" />
+
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="摄像头:" FontSize="11" Classes="secondary" />
+                        <TextBlock Text="{Binding CameraStatus}"
+                                   FontSize="11"
+                                   FontWeight="Medium"
+                                   Classes="accent" />
+                      </StackPanel>
+                      
+                      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsCameraActive}">
+                        <TextBlock Text="已捕获:" FontSize="11" Classes="secondary" />
+                        <TextBlock Text="{Binding CaptureCount}"
+                                   FontSize="11"
+                                   FontWeight="Medium"
+                                   Classes="primary" />
+                        <TextBlock Text="张" FontSize="11" Classes="secondary" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+
+                  <!-- 摄像头预览区域 -->
+                  <Border Background="{DynamicResource CardBackgroundBrush}"
+                          CornerRadius="8"
+                          Padding="12"
+                          BorderBrush="{DynamicResource BorderBrush}"
+                          BorderThickness="1"
+                          Height="200">
+                    <controls:CameraPreviewControl x:Name="CameraPreview"
+                                                   CameraService="{Binding CameraService}"
+                                                   CaptureRequested="OnCameraCaptureRequested"
+                                                   ErrorOccurred="OnCameraErrorOccurred" />
+                  </Border>
+
+                  <!-- 摄像头控制按钮 -->
+                  <Border Background="{DynamicResource CardBackgroundBrush}"
+                          CornerRadius="8"
+                          Padding="12"
+                          BorderBrush="{DynamicResource BorderBrush}"
+                          BorderThickness="1">
+                    <StackPanel Spacing="8">
+                      <TextBlock Text="🎮 摄像头控制"
+                                 FontWeight="Medium"
+                                 FontSize="12"
+                                 HorizontalAlignment="Center" />
+
+                      <!-- 主要控制按钮 -->
+                      <Button x:Name="StartCameraButton"
+                              Content="▶️ 启动摄像头"
+                              Command="{Binding StartCameraCommand}"
+                              Classes="success"
+                              Padding="16,12"
+                              CornerRadius="8"
+                              FontSize="12"
+                              FontWeight="Medium"
+                              HorizontalAlignment="Stretch"
+                              IsVisible="{Binding !IsCameraActive}" />
+
+                      <!-- 停止按钮 -->
+                      <Button x:Name="StopCameraButton"
+                              Content="⏹️ 停止摄像头"
+                              Command="{Binding StopCameraCommand}"
+                              Classes="danger"
+                              Padding="16,12"
+                              CornerRadius="8"
+                              FontSize="12"
+                              FontWeight="Medium"
+                              HorizontalAlignment="Stretch"
+                              IsVisible="{Binding IsCameraActive}" />
+
+                      <!-- 捕获按钮 -->
+                      <Button x:Name="CaptureCameraButton"
+                              Content="📸 捕获图像 (空格)"
+                              Command="{Binding CaptureCameraImageCommand}"
+                              Classes="accent"
+                              Padding="16,12"
+                              CornerRadius="8"
+                              FontSize="12"
+                              FontWeight="Medium"
+                              HorizontalAlignment="Stretch"
+                              IsVisible="{Binding IsCameraActive}" />
+
+                      <!-- 加载指示器 -->
+                      <StackPanel x:Name="CameraLoadingPanel"
+                                  Orientation="Horizontal"
+                                  Spacing="8"
+                                  HorizontalAlignment="Center"
+                                  IsVisible="{Binding IsCameraLoading}"
+                                  Margin="0,4">
+                        <Border Width="16" Height="16"
+                                Background="#2196F3"
+                                CornerRadius="8">
+                          <Border.Styles>
+                            <Style Selector="Border">
+                              <Style.Animations>
+                                <Animation Duration="0:0:1" IterationCount="INFINITE">
+                                  <KeyFrame Cue="0%">
+                                    <Setter Property="Opacity" Value="0.5" />
+                                  </KeyFrame>
+                                  <KeyFrame Cue="50%">
+                                    <Setter Property="Opacity" Value="1" />
+                                  </KeyFrame>
+                                  <KeyFrame Cue="100%">
+                                    <Setter Property="Opacity" Value="0.5" />
+                                  </KeyFrame>
+                                </Animation>
+                              </Style.Animations>
+                            </Style>
+                          </Border.Styles>
+                        </Border>
+                        <TextBlock Text="正在加载..."
+                                   FontSize="11"
+                                   Classes="secondary"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+
+                      <!-- 提示信息 -->
+                      <Border Background="{DynamicResource HoverBackgroundBrush}"
+                              CornerRadius="4"
+                              Padding="8,4"
+                              IsVisible="{Binding IsCameraActive}">
+                        <TextBlock Text="✨ 提示: 按空格键快速捕获图像"
+                                   FontSize="10"
+                                   Classes="secondary"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                      </Border>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </Border>
             </StackPanel>
           </ScrollViewer>
         </Border>

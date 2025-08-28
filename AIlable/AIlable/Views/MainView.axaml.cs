@@ -64,6 +64,7 @@ public partial class MainView : UserControl
             // Subscribe to view model events
             viewModel.FitToWindowRequested += OnFitToWindowRequested;
             viewModel.ResetViewRequested += OnResetViewRequested;
+            viewModel.CameraPreviewStartRequested += OnCameraPreviewStartRequested;
 
             // Subscribe to annotation state changes
             viewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -336,9 +337,16 @@ public partial class MainView : UserControl
                 break;
                 
             case Key.Space:
-                // 空格键触发姿态标注的自动对称功能
-                if (viewModel.SelectedAnnotation is KeypointAnnotation keypointAnnotation)
+                // 空格键触发姿态标注的自动对称功能或摄像头捕获
+                if (viewModel.IsCameraActive)
                 {
+                    // 如果摄像头活跃，执行捕获命令
+                    viewModel.CaptureCameraImageCommand.Execute(null);
+                    e.Handled = true;
+                }
+                else if (viewModel.SelectedAnnotation is KeypointAnnotation keypointAnnotation)
+                {
+                    // 否则执行姿态标注的自动对称功能
                     var keypointTool = viewModel.ToolManager.GetTool(AIlable.Models.AnnotationTool.Keypoint) as KeypointTool;
                     if (keypointTool != null)
                     {
@@ -381,6 +389,11 @@ public partial class MainView : UserControl
     private void OnAIClick(object? sender, RoutedEventArgs e)
     {
         TogglePanel("AIPanel");
+    }
+
+    private void OnCameraClick(object? sender, RoutedEventArgs e)
+    {
+        TogglePanel("CameraPanel");
     }
 
     private void TogglePanel(string panelName)
@@ -473,6 +486,56 @@ public partial class MainView : UserControl
         if (DataContext is MainViewModel viewModel)
         {
             viewModel.CurrentAnnotationMode = MainViewModel.AnnotationMode.Preview;
+        }
+    }
+    
+    // 摄像头预览控件事件处理
+    private void OnCameraCaptureRequested(object? sender, EventArgs e)
+    {
+        // 当摄像头预览控件请求捕获时，触发MainViewModel的捕获命令
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.CaptureCameraImageCommand.Execute(null);
+        }
+    }
+    
+    private void OnCameraErrorOccurred(object? sender, string error)
+    {
+        // 处理摄像头错误
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.StatusText = $"摄像头错误: {error}";
+        }
+        Console.WriteLine($"摄像头错误: {error}");
+    }
+    
+    // 摄像头预览启动事件处理
+    private async void OnCameraPreviewStartRequested()
+    {
+        var cameraPreview = this.FindControl<CameraPreviewControl>("CameraPreview");
+        if (cameraPreview != null)
+        {
+            Console.WriteLine("正在启动摄像头预览控件...");
+            
+            // 调试：检查CameraService绑定状态
+            if (DataContext is MainViewModel viewModel)
+            {
+                Console.WriteLine($"MainViewModel.CameraService: {viewModel.CameraService != null}");
+                Console.WriteLine($"CameraPreview.CameraService: {cameraPreview.CameraService != null}");
+                
+                // 如果绑定失败，手动设置
+                if (cameraPreview.CameraService == null && viewModel.CameraService != null)
+                {
+                    Console.WriteLine("检测到绑定失败，手动设置CameraService...");
+                    cameraPreview.CameraService = viewModel.CameraService;
+                }
+            }
+            
+            await cameraPreview.StartPreviewAsync();
+        }
+        else
+        {
+            Console.WriteLine("未找到摄像头预览控件");
         }
     }
 }

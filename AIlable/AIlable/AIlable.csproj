@@ -37,5 +37,9 @@
         
         <!-- Math & Geometry -->
         <PackageReference Include="System.Numerics.Vectors"/>
+        
+        <!-- Camera & Video Support -->
+        <PackageReference Include="OpenCvSharp4"/>
+        <PackageReference Include="OpenCvSharp4.runtime.win"/>
     </ItemGroup>
 </Project>

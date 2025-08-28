@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -70,6 +70,13 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty] private AnnotationMode _currentAnnotationMode = AnnotationMode.Fast;
 
+    // 摄像头相关属性
+    [ObservableProperty] private bool _isCameraActive = false;
+    [ObservableProperty] private string _cameraStatus = "摄像头未启动";
+    [ObservableProperty] private bool _isCameraLoading = false;
+    [ObservableProperty] private ICameraService? _cameraService;
+    [ObservableProperty] private int _captureCount = 0;
+
     partial void OnCurrentImageIndexChanged(int value)
     {
         LoadImageByIndex(value);
@@ -104,6 +111,9 @@ public partial class MainViewModel : ViewModelBase
         _userExperienceService = new UserExperienceService();
         _smartToolSwitching = new SmartToolSwitchingService(_toolManager);
         _undoRedoService = new UndoRedoService();
+        
+        // 初始化摄像头服务
+        _cameraService = new CameraService();
         
         LoadImageCommand = new AsyncRelayCommand(LoadImageAsync);
         CreateNewProjectCommand = new AsyncRelayCommand(CreateNewProjectAsync);
@@ -164,6 +174,11 @@ public partial class MainViewModel : ViewModelBase
         // 撤销/重做命令
         UndoCommand = new RelayCommand(() => _undoRedoService.Undo(), () => _undoRedoService.CanUndo);
         RedoCommand = new RelayCommand(() => _undoRedoService.Redo(), () => _undoRedoService.CanRedo);
+        
+        // 摄像头命令
+        StartCameraCommand = new AsyncRelayCommand(StartCameraAsync);
+        StopCameraCommand = new AsyncRelayCommand(StopCameraAsync);
+        CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
         
         // 订阅撤销服务的属性变化以更新命令状态
         _undoRedoService.PropertyChanged += (s, e) => 
@@ -245,6 +260,11 @@ public partial class MainViewModel : ViewModelBase
     // 图像导航命令
     public ICommand NextImageCommand { get; }
     public ICommand PreviousImageCommand { get; }
+    
+    // 摄像头命令
+    public ICommand StartCameraCommand { get; }
+    public ICommand StopCameraCommand { get; }
+    public ICommand CaptureCameraImageCommand { get; }
 
     public ToolManager ToolManager => _toolManager;
     public AIModelManager AIModelManager => _aiModelManager;
@@ -254,6 +274,7 @@ public partial class MainViewModel : ViewModelBase
     // Events for view interaction
     public event System.Action? FitToWindowRequested;
     public event System.Action? ResetViewRequested;
+    public event System.Action? CameraPreviewStartRequested;
 
     public void SetFileDialogService(IFileDialogService fileDialogService)
     {
@@ -2437,5 +2458,278 @@ public partial class MainViewModel : ViewModelBase
         Console.WriteLine("[DEBUG MAIN] Returned to annotation view successfully");
     }
 
+    #endregion
+    
+    #region 摄像头功能
+    
+    /// <summary>
+    /// 启动摄像头
+    /// </summary>
+    private async Task StartCameraAsync()
+    {
+        if (CameraService == null)
+        {
+            StatusText = "摄像头服务未初始化";
+            return;
+        }
+
+        try
+        {
+            IsCameraLoading = true;
+            CameraStatus = "正在检查摄像头设备...";
+            StatusText = "正在检查摄像头设备...";
+
+            // 首先检查可用的摄像头设备
+            var availableCameras = await CameraService.GetAvailableCamerasAsync();
+            if (availableCameras.Count == 0)
+            {
+                CameraStatus = "未检测到摄像头设备";
+                StatusText = "未检测到可用的摄像头设备，请检查设备连接和权限";
+                await ShowCameraErrorDialog("摄像头设备未找到", 
+                    "请检查：\n1. 摄像头是否正确连接\n2. 是否有其他应用程序正在使用摄像头\n3. 应用是否有访问摄像头的权限");
+                return;
+            }
+
+            CameraStatus = $"正在初始化摄像头 ({availableCameras.Count} 个设备可用)...";
+            StatusText = "正在初始化摄像头...";
+
+            // 初始化摄像头
+            var initSuccess = await CameraService.InitializeCameraAsync();
+            if (!initSuccess)
+            {
+                CameraStatus = "摄像头初始化失败";
+                StatusText = "摄像头初始化失败";
+                await ShowCameraErrorDialog("摄像头初始化失败", 
+                    "可能原因：\n1. 摄像头正被其他应用使用\n2. 没有访问摄像头的权限\n3. 摄像头驱动问题\n\n请关闭其他可能使用摄像头的应用程序后重试。");
+                return;
+            }
+
+            // 添加测试事件订阅
+            CameraService.FrameAvailable += OnTestFrameAvailable;
+            
+            CameraStatus = "正在启动摄像头预览...";
+            StatusText = "正在启动摄像头预览...";
+
+            // 开始预览
+            var startSuccess = await CameraService.StartPreviewAsync();
+            if (startSuccess)
+            {
+                IsCameraActive = true;
+                CameraStatus = "摄像头运行中 - 按空格键捕获";
+                StatusText = "摄像头已启动，按空格键或点击捕获按钮拍照";
+                
+                Console.WriteLine("摄像头成功启动，等待1秒后通知预览控件...");
+                
+                // 等待一段时间让摄像头稳定
+                await Task.Delay(1000);
+                
+                // 通知摄像头预览控件开始预览
+                CameraPreviewStartRequested?.Invoke();
+                
+                // 显示成功提示
+                await ShowCameraSuccessMessage("摄像头启动成功！您可以开始拍照了。");
+            }
+            else
+            {
+                CameraStatus = "启动摄像头预览失败";
+                StatusText = "启动摄像头预览失败";
+                await ShowCameraErrorDialog("摄像头预览失败", 
+                    "无法启动摄像头预览，请检查摄像头设备状态。");
+            }
+        }
+        catch (Exception ex)
+        {
+            CameraStatus = $"摄像头启动失败: {ex.Message}";
+            StatusText = $"摄像头启动失败: {ex.Message}";
+            Console.WriteLine($"摄像头启动异常: {ex}");
+            await ShowCameraErrorDialog("摄像头启动异常", 
+                $"发生未预期的错误：{ex.Message}\n\n请检查系统日志获取更多信息。");
+        }
+        finally
+        {
+            IsCameraLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// 停止摄像头
+    /// </summary>
+    private async Task StopCameraAsync()
+    {
+        if (CameraService == null || !IsCameraActive)
+            return;
+
+        try
+        {
+            await CameraService.StopPreviewAsync();
+            IsCameraActive = false;
+            CameraStatus = "摄像头已停止";
+            StatusText = "摄像头已停止";
+        }
+        catch (Exception ex)
+        {
+            CameraStatus = $"停止摄像头失败: {ex.Message}";
+            StatusText = $"停止摄像头失败: {ex.Message}";
+            Console.WriteLine($"停止摄像头异常: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// 捕获摄像头图像并添加到项目
+    /// </summary>
+    private async Task CaptureCameraImageAsync()
+    {
+        if (CameraService == null || !IsCameraActive)
+        {
+            StatusText = "摄像头未启动";
+            return;
+        }
+
+        try
+        {
+            // 确保有项目
+            if (CurrentProject == null)
+            {
+                CurrentProject = new AnnotationProject
+                {
+                    Name = "摄像头项目",
+                    Description = "通过摄像头捕获的图像标注项目"
+                };
+                HasProject = true;
+            }
+
+            CameraStatus = "正在捕获图像...";
+            StatusText = "正在捕获图像...";
+
+            // 生成唯一的文件名
+            CaptureCount++;
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var fileName = $"camera_capture_{timestamp}_{CaptureCount:D3}.jpg";
+            
+            // 确保项目目录存在
+            string projectDir;
+            if (!string.IsNullOrEmpty(CurrentProject.ProjectPath))
+            {
+                projectDir = Path.GetDirectoryName(CurrentProject.ProjectPath) ?? Path.GetTempPath();
+            }
+            else
+            {
+                projectDir = Path.Combine(Path.GetTempPath(), "AIlable_Camera");
+                Directory.CreateDirectory(projectDir);
+            }
+            
+            var outputPath = Path.Combine(projectDir, fileName);
+
+            // 保存捕获的图像
+            var saveSuccess = await CameraService.SaveCapturedImageAsync(outputPath);
+            if (!saveSuccess)
+            {
+                CameraStatus = "图像保存失败";
+                StatusText = "图像保存失败";
+                return;
+            }
+
+            // 创建AnnotationImage并添加到项目
+            var annotationImage = await ImageService.CreateAnnotationImageAsync(outputPath);
+            if (annotationImage != null)
+            {
+                CurrentProject.AddImage(annotationImage);
+                
+                // 切换到新捕获的图像
+                var newImageIndex = CurrentProject.Images.Count - 1;
+                CurrentImageIndex = newImageIndex;
+                LoadImageByIndex(newImageIndex);
+                
+                // 延迟适应窗口
+                _ = Task.Delay(150).ContinueWith(_ =>
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        FitToWindowRequested?.Invoke();
+                    });
+                });
+
+                CameraStatus = $"图像已捕获 ({CaptureCount})";
+                StatusText = $"已成功捕获并保存图像: {fileName}";
+                
+                Console.WriteLine($"摄像头图像已保存: {outputPath}");
+            }
+            else
+            {
+                CameraStatus = "创建图像对象失败";
+                StatusText = "创建图像对象失败";
+            }
+        }
+        catch (Exception ex)
+        {
+            CameraStatus = $"捕获图像失败: {ex.Message}";
+            StatusText = $"捕获图像失败: {ex.Message}";
+            Console.WriteLine($"捕获摄像头图像异常: {ex}");
+        }
+    }
+    
+    /// <summary>
+    /// 显示摄像头错误对话框
+    /// </summary>
+    private async Task ShowCameraErrorDialog(string title, string message)
+    {
+        try
+        {
+            // 在实际应用中，这里可以使用Avalonia的MessageBox或自定义对话框
+            // 目前使用控制台输出和状态栏显示
+            Console.WriteLine($"[摄像头错误] {title}: {message}");
+            StatusText = $"❗ {title}";
+            
+            // 在未来版本中，可以添加弹窗对话框
+            // 例如：
+            // await MessageBox.Show(title, message, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"显示错误对话框失败: {ex.Message}");
+        }
+        
+        await Task.CompletedTask;
+    }
+    
+    /// <summary>
+    /// 显示摄像头成功消息
+    /// </summary>
+    private async Task ShowCameraSuccessMessage(string message)
+    {
+        try
+        {
+            Console.WriteLine($"[摄像头成功] {message}");
+            StatusText = $"✅ {message}";
+            
+            // 在未来版本中，可以添加成功提示动画或通知
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"显示成功消息失败: {ex.Message}");
+        }
+        
+        await Task.CompletedTask;
+    }
+    
+    /// <summary>
+    /// 测试FrameAvailable事件处理
+    /// </summary>
+    private void OnTestFrameAvailable(object? sender, Avalonia.Media.Imaging.Bitmap bitmap)
+    {
+        // 确保在UI线程上更新状态
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => OnTestFrameAvailable(sender, bitmap));
+            return;
+        }
+        
+        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+        Console.WriteLine($"[{timestamp}] MainViewModel: 收到FrameAvailable事件! 图像尺寸: {bitmap.PixelSize.Width}x{bitmap.PixelSize.Height}");
+        
+        // 更新状态以显示我们收到了帧
+        StatusText = $"✅ 摄像头正常工作 - 收到 {bitmap.PixelSize.Width}x{bitmap.PixelSize.Height} 画面";
+    }
+    
     #endregion
 }
