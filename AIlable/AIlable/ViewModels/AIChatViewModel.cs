@@ -37,6 +37,7 @@ public partial class AIChatViewModel : ViewModelBase
     private readonly IVoiceRecordingService? _voiceRecordingService;
     private readonly IAudioPlayerService? _audioPlayerService;
     private readonly IConfigurationService _configurationService;
+    private readonly OllamaTestService _ollamaTestService;
     private CancellationTokenSource? _currentRequestCancellation;
     
     public AIChatViewModel() : this(new AIChatService(), null, null, null, new Services.ConfigurationService()) { }
@@ -48,6 +49,7 @@ public partial class AIChatViewModel : ViewModelBase
         _voiceRecordingService = voiceRecordingService ?? new VoiceRecordingService();
         _audioPlayerService = audioPlayerService ?? new Services.AudioPlayerService();
         _configurationService = configurationService ?? new Services.ConfigurationService();
+        _ollamaTestService = new OllamaTestService();
         
         InitializeAsync();
     }
@@ -223,6 +225,7 @@ public partial class AIChatViewModel : ViewModelBase
     public ICommand ToggleConfigPanelCommand { get; private set; } = null!;
     public ICommand PlayAudioCommand { get; private set; } = null!;  // 播放音频命令
     public ICommand DeleteMessageCommand { get; private set; } = null!;  // 删除消息命令
+    public ICommand TestOllamaConnectionCommand { get; private set; } = null!;  // 测试Ollama连接命令
     
     private void InitializeCommands()
     {
@@ -240,14 +243,16 @@ public partial class AIChatViewModel : ViewModelBase
         ToggleConfigPanelCommand = new RelayCommand(() => IsConfigPanelVisible = !IsConfigPanelVisible);
         PlayAudioCommand = new AsyncRelayCommand<ChatMessage>(PlayAudioAsync);
         DeleteMessageCommand = new RelayCommand<ChatMessage>(DeleteMessage);
+        TestOllamaConnectionCommand = new AsyncRelayCommand(TestOllamaConnectionAsync);
     }
     
     private void InitializeProviders()
     {
+        // Ollama配置 - 添加更多常用模型
         AvailableProviders.Add(new AIProviderConfig(AIProviderType.Ollama, "Ollama (本地)")
         {
             ApiUrl = "http://localhost:11434",
-            Model = "llama2"
+            Model = "llama3.2"  // 使用更新的默认模型
         });
         
         AvailableProviders.Add(new AIProviderConfig(AIProviderType.OpenAI, "OpenAI")
@@ -310,6 +315,41 @@ public partial class AIChatViewModel : ViewModelBase
             {
                 StatusText = $"✅ 已连接到 {value.DisplayName} ({value.Model})";
                 Console.WriteLine($"[DEBUG VM] Configuration valid, status: {StatusText}");
+                
+                // 如果是Ollama，自动测试连接
+                if (value.ProviderType == AIProviderType.Ollama)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var (isAvailable, message) = await _ollamaTestService.TestOllamaConnectionAsync(value.ApiUrl);
+                            if (!isAvailable)
+                            {
+                                StatusText = $"⚠️ Ollama连接问题: {message}";
+                                Console.WriteLine($"[WARNING VM] Ollama connection issue: {message}");
+                            }
+                            else
+                            {
+                                // 进一步测试模型
+                                var (modelAvailable, modelMessage) = await _ollamaTestService.TestModelAsync(value.ApiUrl, value.Model);
+                                if (!modelAvailable)
+                                {
+                                    StatusText = $"⚠️ {modelMessage}";
+                                    Console.WriteLine($"[WARNING VM] Ollama model issue: {modelMessage}");
+                                }
+                                else
+                                {
+                                    StatusText = $"✅ Ollama连接正常 - {value.DisplayName} ({value.Model})";
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[ERROR VM] Ollama auto-test failed: {ex.Message}");
+                        }
+                    });
+                }
                 
                 // 保存上次使用的配置
                 _ = Task.Run(async () =>
@@ -883,6 +923,91 @@ public partial class AIChatViewModel : ViewModelBase
         {
             Console.WriteLine($"[ERROR] Failed to delete message: {ex.Message}");
             StatusText = $"❌ 删除失败: {ex.Message}";
+        }
+    }
+    
+    private async Task TestOllamaConnectionAsync()
+    {
+        if (SelectedProvider?.ProviderType != AIProviderType.Ollama)
+        {
+            StatusText = "请先选择Ollama提供商";
+            return;
+        }
+        
+        try
+        {
+            StatusText = "正在测试Ollama连接...";
+            Console.WriteLine($"[DEBUG VM] Testing Ollama connection to: {SelectedProvider.ApiUrl}");
+            
+            var (isAvailable, message) = await _ollamaTestService.TestOllamaConnectionAsync(SelectedProvider.ApiUrl);
+            
+            if (!isAvailable)
+            {
+                StatusText = $"连接失败: {message}";
+                Console.WriteLine($"[ERROR VM] Ollama connection failed: {message}");
+                
+                var diagnosticText = "Ollama连接诊断结果:" + Environment.NewLine + Environment.NewLine;
+                diagnosticText += "连接失败: " + message + Environment.NewLine + Environment.NewLine;
+                diagnosticText += "解决建议:" + Environment.NewLine;
+                diagnosticText += "1. 确保Ollama已安装并启动" + Environment.NewLine;
+                diagnosticText += "2. 检查端口11434是否被占用" + Environment.NewLine;
+                diagnosticText += "3. 尝试在终端运行: ollama serve" + Environment.NewLine;
+                diagnosticText += "4. 确认防火墙设置允许本地连接";
+                
+                var diagnosticMessage = ChatMessage.CreateAssistantMessage(diagnosticText);
+                Messages.Add(diagnosticMessage);
+                return;
+            }
+            
+            var (modelAvailable, modelMessage) = await _ollamaTestService.TestModelAsync(SelectedProvider.ApiUrl, SelectedProvider.Model);
+            
+            if (!modelAvailable)
+            {
+                StatusText = $"模型问题: {modelMessage}";
+                Console.WriteLine($"[WARNING VM] Ollama model test failed: {modelMessage}");
+                
+                var diagnosticText = "Ollama模型诊断结果:" + Environment.NewLine + Environment.NewLine;
+                diagnosticText += "模型问题: " + modelMessage + Environment.NewLine + Environment.NewLine;
+                diagnosticText += "解决建议:" + Environment.NewLine;
+                diagnosticText += "1. 下载模型: ollama pull " + SelectedProvider.Model + Environment.NewLine;
+                diagnosticText += "2. 查看可用模型: ollama list" + Environment.NewLine;
+                diagnosticText += "3. 或选择其他已安装的模型";
+                
+                var diagnosticMessage = ChatMessage.CreateAssistantMessage(diagnosticText);
+                Messages.Add(diagnosticMessage);
+                return;
+            }
+            
+            var versionInfo = await _ollamaTestService.GetOllamaVersionAsync(SelectedProvider.ApiUrl);
+            
+            StatusText = $"Ollama连接测试成功 - {SelectedProvider.DisplayName}";
+            Console.WriteLine($"[DEBUG VM] Ollama connection test successful");
+            
+            var successText = "Ollama连接测试成功!" + Environment.NewLine + Environment.NewLine;
+            successText += "服务状态: 正常运行" + Environment.NewLine;
+            successText += "模型状态: " + SelectedProvider.Model + " 可用" + Environment.NewLine;
+            successText += "服务信息:" + Environment.NewLine + message + Environment.NewLine + Environment.NewLine;
+            successText += "版本信息:" + Environment.NewLine + versionInfo + Environment.NewLine + Environment.NewLine;
+            successText += "现在可以开始对话了！";
+            
+            var successMessage = ChatMessage.CreateAssistantMessage(successText);
+            Messages.Add(successMessage);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR VM] Ollama test failed: {ex.Message}");
+            StatusText = $"测试失败: {ex.Message}";
+            
+            var errorText = "Ollama连接测试失败:" + Environment.NewLine + Environment.NewLine;
+            errorText += "错误信息: " + ex.Message + Environment.NewLine + Environment.NewLine;
+            errorText += "请检查:" + Environment.NewLine;
+            errorText += "1. Ollama是否已安装" + Environment.NewLine;
+            errorText += "2. 服务是否正在运行" + Environment.NewLine;
+            errorText += "3. 网络连接是否正常" + Environment.NewLine;
+            errorText += "4. 端口11434是否可访问";
+            
+            var errorMessage = ChatMessage.CreateAssistantMessage(errorText);
+            Messages.Add(errorMessage);
         }
     }
 }

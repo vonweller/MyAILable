@@ -32,6 +32,10 @@ public class AIChatService : IAIChatService, IDisposable
     {
         _httpClient = new HttpClient();
         _httpClient.Timeout = TimeSpan.FromMinutes(2);
+        
+        // 确保HTTP客户端使用UTF-8编码
+        _httpClient.DefaultRequestHeaders.AcceptCharset.Clear();
+        _httpClient.DefaultRequestHeaders.AcceptCharset.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("utf-8"));
     }
     
     public void Configure(AIProviderConfig config)
@@ -242,9 +246,9 @@ public class AIChatService : IAIChatService, IDisposable
             throw;
         }
         
-        // 将流处理移到try-catch外部
+        // 将流处理移到try-catch外部，确保使用正确的UTF-8编码
         using var stream = await response.Content.ReadAsStreamAsync();
-        using var reader = new StreamReader(stream);
+        using var reader = new StreamReader(stream, new UTF8Encoding(false, true));
         
         string? line;
         var lineCount = 0;
@@ -255,27 +259,47 @@ public class AIChatService : IAIChatService, IDisposable
             lineCount++;
             Console.WriteLine($"[DEBUG STREAM] Line {lineCount}: {line}");
             
-            if (line.StartsWith("data: "))
+            // 处理不同的流格式
+            string dataToProcess = "";
+            
+            if (_config!.ProviderType == AIProviderType.Ollama)
             {
-                var data = line.Substring(6);
-                if (data == "[DONE]") 
+                // Ollama直接返回JSON，不使用SSE格式
+                if (!string.IsNullOrWhiteSpace(line))
                 {
-                    Console.WriteLine($"[DEBUG STREAM] Stream ended with [DONE]");
-                    
-                    // 如果收集到音频数据，在最后处理音频
-                    if (audioDataBuilder.Length > 0)
-                    {
-                        Console.WriteLine($"[DEBUG STREAM] Processing collected audio data: {audioDataBuilder.Length} chars");
-                        var audioProcessingResult = ProcessAudioData(audioDataBuilder.ToString(), currentMessage);
-                        if (!string.IsNullOrEmpty(audioProcessingResult))
-                        {
-                            yield return audioProcessingResult;
-                        }
-                    }
-                    break;
+                    dataToProcess = line;
                 }
-                
-                var (textContent, audioData) = ParseStreamingResponse(data);
+            }
+            else
+            {
+                // OpenAI等使用SSE格式 "data: {...}"
+                if (line.StartsWith("data: "))
+                {
+                    var data = line.Substring(6);
+                    if (data == "[DONE]") 
+                    {
+                        Console.WriteLine($"[DEBUG STREAM] Stream ended with [DONE]");
+                        
+                        // 如果收集到音频数据，在最后处理音频
+                        if (audioDataBuilder.Length > 0)
+                        {
+                            Console.WriteLine($"[DEBUG STREAM] Processing collected audio data: {audioDataBuilder.Length} chars");
+                            var audioProcessingResult = ProcessAudioData(audioDataBuilder.ToString(), currentMessage);
+                            if (!string.IsNullOrEmpty(audioProcessingResult))
+                            {
+                                yield return audioProcessingResult;
+                            }
+                        }
+                        break;
+                    }
+                    dataToProcess = data;
+                }
+            }
+            
+            // 处理数据
+            if (!string.IsNullOrEmpty(dataToProcess))
+            {
+                var (textContent, audioData) = ParseStreamingResponse(dataToProcess);
                 if (!string.IsNullOrEmpty(textContent))
                 {
                     Console.WriteLine($"[DEBUG STREAM] Yielding text: '{textContent}'");
@@ -288,6 +312,24 @@ public class AIChatService : IAIChatService, IDisposable
                     audioDataBuilder.Append(audioData);
                     Console.WriteLine($"[DEBUG STREAM] Collected audio data chunk, total length: {audioDataBuilder.Length}");
                 }
+                
+                // 检查Ollama的done标志
+                if (_config!.ProviderType == AIProviderType.Ollama)
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(dataToProcess);
+                        if (doc.RootElement.TryGetProperty("done", out var doneElement) && doneElement.GetBoolean())
+                        {
+                            Console.WriteLine($"[DEBUG STREAM] Ollama stream completed (done=true)");
+                            break;
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        // 忽略JSON解析错误，继续处理
+                    }
+                }
             }
         }
     }
@@ -299,12 +341,27 @@ public class AIChatService : IAIChatService, IDisposable
         // 添加历史消息
         foreach (var historyMessage in history)
         {
-            var messageContent = BuildMessageContent(historyMessage);
-            messages.Add(new
+            if (_config!.ProviderType == AIProviderType.Ollama)
             {
-                role = historyMessage.Role.ToString().ToLower(),
-                content = messageContent
-            });
+                // Ollama格式：图片单独放在images字段
+                var messageObj = new
+                {
+                    role = historyMessage.Role.ToString().ToLower(),
+                    content = historyMessage.Content,
+                    images = GetImagesForOllama(historyMessage)
+                };
+                messages.Add(messageObj);
+            }
+            else
+            {
+                // OpenAI格式：图片嵌入在content中
+                var messageContent = BuildMessageContent(historyMessage);
+                messages.Add(new
+                {
+                    role = historyMessage.Role.ToString().ToLower(),
+                    content = messageContent
+                });
+            }
         }
         
         // 添加当前消息（只是文本）
@@ -314,25 +371,74 @@ public class AIChatService : IAIChatService, IDisposable
             content = message
         });
 
-        // 构建请求体，支持全模态
-        var requestBody = new
+        // 根据不同的提供商构建不同的请求体
+        if (_config!.ProviderType == AIProviderType.Ollama)
         {
-            model = _config!.Model,
-            messages = messages,
-            temperature = _config.Temperature,
-            max_tokens = IsOmniModel(_config.Model) ? Math.Min(_config.MaxTokens, 2048) : _config.MaxTokens,
-            stream = stream,
-            // 全模态相关参数
-            modalities = IsOmniModel(_config.Model) ? new[] { "text", "audio" } : null,
-            audio = IsOmniModel(_config.Model) ? new { voice = _config.AiVoice, format = "wav" } : null,
-            stream_options = stream ? new { include_usage = true } : null
-        };
-        
-        return JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
+            // Ollama特定的请求格式
+            var ollamaRequestBody = new
+            {
+                model = _config.Model,
+                messages = messages,
+                stream = stream,
+                options = new
+                {
+                    temperature = _config.Temperature,
+                    num_predict = _config.MaxTokens
+                }
+            };
+            
+            return JsonSerializer.Serialize(ollamaRequestBody, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+        else
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        });
+            // OpenAI兼容格式（包括其他提供商）
+            var requestBody = new
+            {
+                model = _config.Model,
+                messages = messages,
+                temperature = _config.Temperature,
+                max_tokens = IsOmniModel(_config.Model) ? Math.Min(_config.MaxTokens, 2048) : _config.MaxTokens,
+                stream = stream,
+                // 全模态相关参数
+                modalities = IsOmniModel(_config.Model) ? new[] { "text", "audio" } : null,
+                audio = IsOmniModel(_config.Model) ? new { voice = _config.AiVoice, format = "wav" } : null,
+                stream_options = stream ? new { include_usage = true } : null
+            };
+            
+            return JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+    }
+
+    private string[]? GetImagesForOllama(ChatMessage message)
+    {
+        if (message.Type == MessageType.Image && !string.IsNullOrEmpty(message.ImageFilePath))
+        {
+            try
+            {
+                // 读取图片并转换为base64
+                var imageBytes = File.ReadAllBytes(message.ImageFilePath);
+                var base64Image = Convert.ToBase64String(imageBytes);
+                
+                Console.WriteLine($"[DEBUG] Ollama image converted to base64, size: {imageBytes.Length} bytes");
+                
+                // Ollama格式：直接返回base64字符串数组
+                return new[] { base64Image };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to read image for Ollama: {ex.Message}");
+                return null;
+            }
+        }
+        return null;
     }
 
     private object BuildMessageContent(ChatMessage message)
@@ -356,17 +462,36 @@ public class AIChatService : IAIChatService, IDisposable
                         
                         Console.WriteLine($"[DEBUG] Image converted to base64, size: {imageBytes.Length} bytes, mime: {mimeType}");
                         
-                        // 使用OpenAI Vision API格式
-                        return new object[]
+                        // 根据提供商使用不同的格式
+                        if (_config!.ProviderType == AIProviderType.Ollama)
                         {
-                            new { type = "text", text = message.Content },
-                            new { 
-                                type = "image_url", 
-                                image_url = new { 
-                                    url = $"data:{mimeType};base64,{base64Image}" 
-                                } 
-                            }
-                        };
+                            // Ollama格式：content是数组，包含文本和图片
+                            return new object[]
+                            {
+                                new { 
+                                    type = "text", 
+                                    text = message.Content 
+                                },
+                                new { 
+                                    type = "image", 
+                                    image = base64Image 
+                                }
+                            };
+                        }
+                        else
+                        {
+                            // OpenAI Vision API格式
+                            return new object[]
+                            {
+                                new { type = "text", text = message.Content },
+                                new { 
+                                    type = "image_url", 
+                                    image_url = new { 
+                                        url = $"data:{mimeType};base64,{base64Image}" 
+                                    } 
+                                }
+                            };
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -572,9 +697,39 @@ public class AIChatService : IAIChatService, IDisposable
             
             if (_config!.ProviderType == AIProviderType.Ollama)
             {
+                // Ollama流式响应格式 - 根据官方文档修复
+                // 格式: {"model":"...","created_at":"...","message":{"role":"assistant","content":"..."},"done":false}
                 if (doc.RootElement.TryGetProperty("message", out var message))
                 {
-                    textContent = message.GetProperty("content").GetString() ?? "";
+                    if (message.TryGetProperty("content", out var content))
+                    {
+                        var contentStr = content.GetString() ?? "";
+                        
+                        // 处理<think>标签 - 完全跳过思考内容
+                        if (contentStr.Trim() == "<think>" || contentStr.Trim() == "</think>")
+                        {
+                            // 跳过开始和结束标签
+                            textContent = "";
+                        }
+                        else if (contentStr.Contains("<think>") || contentStr.Contains("</think>"))
+                        {
+                            // 跳过包含think标签的内容
+                            textContent = "";
+                        }
+                        else
+                        {
+                            // 正常内容
+                            textContent = contentStr;
+                        }
+                        
+                        Console.WriteLine($"[DEBUG STREAM] Ollama content extracted: '{textContent}'");
+                    }
+                }
+                // 检查done标志
+                if (doc.RootElement.TryGetProperty("done", out var done))
+                {
+                    var isDone = done.GetBoolean();
+                    Console.WriteLine($"[DEBUG STREAM] Ollama done: {isDone}");
                 }
             }
             else

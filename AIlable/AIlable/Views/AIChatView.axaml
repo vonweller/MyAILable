@@ -369,6 +369,14 @@
 
           <Button Content="🔧 应用配置" Command="{Binding ConfigureProviderCommand}" 
                   Classes="accent" HorizontalAlignment="Stretch" />
+          
+          <!-- Ollama测试按钮 -->
+          <Button Content="🔍 测试Ollama连接" 
+                  Command="{Binding TestOllamaConnectionCommand}" 
+                  Classes="secondary" 
+                  HorizontalAlignment="Stretch" 
+                  Margin="0,8,0,0"
+                  IsVisible="{Binding SelectedProvider.ProviderType, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static models:AIProviderType.Ollama}}" />
         </StackPanel>
 
         <Separator />

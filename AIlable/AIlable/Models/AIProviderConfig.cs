@@ -54,15 +54,21 @@ public partial class AIProviderConfig : ObservableObject
                 break;
             case AIProviderType.Ollama:
                 ApiUrl = "http://localhost:11434";
-                Model = "llama2";
+                Model = "qwen2.5";
                 AvailableModels.Clear();
-                AvailableModels.Add("llama2");
-                AvailableModels.Add("llama3");
-                AvailableModels.Add("llama3.1");
-                AvailableModels.Add("qwen2");
-                AvailableModels.Add("gemma");
-                AvailableModels.Add("mistral");
-                AvailableModels.Add("codellama");
+                AvailableModels.Add("qwen3:4b");
+                AvailableModels.Add("qwen3:8b");                
+                AvailableModels.Add("qwen3:14b");
+                AvailableModels.Add("qwen3:30b"); 
+                AvailableModels.Add("gemma3:1b");              
+                AvailableModels.Add("gemma3:4b");
+                AvailableModels.Add("gemma3:12b");
+                AvailableModels.Add("gemma3:27b");
+                AvailableModels.Add("qwen2.5-coder:32b");
+                AvailableModels.Add("qwen2.5-coder:14b");
+                AvailableModels.Add("qwen2.5-coder:7b");
+                AvailableModels.Add("qwen2.5-coder:3b");
+                AvailableModels.Add("qwen2.5-coder:1.5b");
                 break;
             case AIProviderType.AliCloud:
                 ApiUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
