@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -699,30 +699,32 @@ public class AIChatService : IAIChatService, IDisposable
             {
                 // Ollama流式响应格式 - 根据官方文档修复
                 // 格式: {"model":"...","created_at":"...","message":{"role":"assistant","content":"..."},"done":false}
+                // 支持reasoning模型（如DeepSeek-R1）的reasoning字段
                 if (doc.RootElement.TryGetProperty("message", out var message))
                 {
-                    if (message.TryGetProperty("content", out var content))
+                    Console.WriteLine($"[DEBUG STREAM] Found 'message' property - Ollama native format");
+                    
+                    // 首先尝试获取reasoning字段（适用于推理模型如DeepSeek-R1、Qwen2.5-Instruct等）
+                    if (message.TryGetProperty("reasoning", out var reasoning))
                     {
-                        var contentStr = content.GetString() ?? "";
-                        
-                        // 处理<think>标签 - 完全跳过思考内容
-                        if (contentStr.Trim() == "<think>" || contentStr.Trim() == "</think>")
+                        var reasoningText = reasoning.GetString();
+                        Console.WriteLine($"[DEBUG STREAM] Found reasoning: '{reasoningText}'");
+                        if (!string.IsNullOrEmpty(reasoningText))
                         {
-                            // 跳过开始和结束标签
-                            textContent = "";
+                            textContent = $"💭 推理: {reasoningText}";
+                            Console.WriteLine($"[DEBUG STREAM] Using reasoning as thinking process");
                         }
-                        else if (contentStr.Contains("<think>") || contentStr.Contains("</think>"))
+                    }
+                    
+                    // 如果没有reasoning或reasoning为空，则获取content
+                    if (string.IsNullOrEmpty(textContent))
+                    {
+                        if (message.TryGetProperty("content", out var content))
                         {
-                            // 跳过包含think标签的内容
-                            textContent = "";
-                        }
-                        else
-                        {
-                            // 正常内容
+                            var contentStr = content.GetString() ?? "";
                             textContent = contentStr;
+                            Console.WriteLine($"[DEBUG STREAM] Ollama content extracted: '{textContent}'");
                         }
-                        
-                        Console.WriteLine($"[DEBUG STREAM] Ollama content extracted: '{textContent}'");
                     }
                 }
                 // 检查done标志
